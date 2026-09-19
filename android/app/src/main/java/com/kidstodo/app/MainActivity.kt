@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var ttsManager: TTSManager
+    private lateinit var updateManager: UpdateManager
     private lateinit var bridge: AndroidBridge
 
     companion object {
@@ -45,8 +46,11 @@ class MainActivity : AppCompatActivity() {
         // 2. Setup WebView
         setupWebView()
 
-        // 3. Setup AndroidBridge
-        bridge = AndroidBridge(this, webView, ttsManager)
+        // 3. Initialize UpdateManager
+        updateManager = UpdateManager(this, webView)
+
+        // 4. Setup AndroidBridge
+        bridge = AndroidBridge(this, webView, ttsManager, updateManager)
         webView.addJavascriptInterface(bridge, "AndroidBridge")
 
         // 4. Handle Back Press
@@ -139,6 +143,13 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         webView.saveState(outState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::updateManager.isInitialized) {
+            updateManager.checkPendingInstall()
+        }
     }
 
     override fun onDestroy() {

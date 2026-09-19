@@ -17,7 +17,8 @@ import java.util.Calendar
 class AndroidBridge(
     private val activity: MainActivity,
     private val webView: WebView,
-    private val ttsManager: TTSManager
+    private val ttsManager: TTSManager,
+    private val updateManager: UpdateManager
 ) {
 
     companion object {
@@ -197,5 +198,25 @@ class AndroidBridge(
                 activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
+    }
+
+    @JavascriptInterface
+    fun getAppVersion(): String {
+        return updateManager.getAppVersion()
+    }
+
+    @JavascriptInterface
+    fun getAppVersionCode(): Int {
+        return updateManager.getAppVersionCode()
+    }
+
+    @JavascriptInterface
+    fun downloadAndInstallApk(downloadUrl: String, versionName: String) {
+        updateManager.downloadAndInstall(downloadUrl, versionName)
+    }
+
+    @JavascriptInterface
+    fun installApk(filePath: String) {
+        updateManager.installApk(java.io.File(filePath))
     }
 }

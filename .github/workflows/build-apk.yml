@@ -35,52 +35,69 @@ jobs:
           cd android
           ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
 
+      - name: Extract Version Info
+        id: get_version
+        run: |
+          VERSION=$(grep 'versionName = ' android/app/build.gradle.kts | head -n 1 | awk -F '"' '{print $2}')
+          if [ -z "$VERSION" ]; then
+            VERSION="1.0.0"
+          fi
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+          else
+            TAG_NAME="v${VERSION}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG_NAME}" >> $GITHUB_OUTPUT
+
       - name: Prepare Artifacts
         run: |
           mkdir -p output-apks
-          cp android/app/build/outputs/apk/release/app-release.apk output-apks/KidsTodo-Release-v1.0.0.apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk output-apks/KidsTodo-Debug-v1.0.0.apk
+          VERSION="${{ steps.get_version.outputs.version }}"
+          cp android/app/build/outputs/apk/release/app-release.apk "output-apks/KidsTodo-Release-v${VERSION}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "output-apks/KidsTodo-Debug-v${VERSION}.apk"
           ls -lh output-apks/
 
       - name: Upload Signed Release APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: KidsTodo-Release-APK
-          path: output-apks/KidsTodo-Release-v1.0.0.apk
+          path: output-apks/KidsTodo-Release-*.apk
           retention-days: 30
 
       - name: Upload Debug APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: KidsTodo-Debug-APK
-          path: output-apks/KidsTodo-Debug-v1.0.0.apk
+          path: output-apks/KidsTodo-Debug-*.apk
           retention-days: 30
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
-          name: "KidsTodo ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }} 正式发布版"
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: "KidsTodo ${{ steps.get_version.outputs.tag }} 正式发布版"
           body: |
             ### 🎮 KidsTodo - 一年级儿童自律打卡与 Switch 游戏激励系统
 
             #### 📱 APK 直接下载（免解压，点击即可在安卓平板直接安装）：
-            - 🚀 **正式正式版（推荐日常使用）**：[KidsTodo-Release-v1.0.0.apk](https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk)
-              - 采用正式 RSA 签名，系统级高优先级准时闹铃，后台唤醒。
-            - 🛠️ **调试版（排查日志使用）**：[KidsTodo-Debug-v1.0.0.apk](https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk)
+            - 🚀 **正式正式版（推荐日常使用）**：[KidsTodo-Release-${{ steps.get_version.outputs.tag }}.apk](https://github.com/fake-okhub/child-todo/releases/download/${{ steps.get_version.outputs.tag }}/KidsTodo-Release-${{ steps.get_version.outputs.tag }}.apk)
+              - 采用正式 RSA 签名，支持应用内在线检测更新与平滑覆盖安装。
+              - 系统级高优先级准时闹铃，平板休眠熄屏唤醒播报。
+            - 🛠️ **调试版（排查日志使用）**：[KidsTodo-Debug-${{ steps.get_version.outputs.tag }}.apk](https://github.com/fake-okhub/child-todo/releases/download/${{ steps.get_version.outputs.tag }}/KidsTodo-Debug-${{ steps.get_version.outputs.tag }}.apk)
 
             #### ✨ 核心特性与更新：
-            1. **时间完全解耦与自由输入**：家长端输入框任意填入分钟数（单位：分钟），每个学科奖励、历史补卡与手动调账均不限时间，杜绝任何数值写死。
-            2. **全科打卡好习惯动态激励**：根据实际启用的学科数量动态判定，只要完成全部基础打卡即可解锁好习惯奖励。
-            3. **极简 iOS 风格上下滚轮时间选择器**：定时闹铃设置支持类似 iOS 原生的上下滑动与惯性滚动。
-            4. **Android 原生轻量壳 + 系统级休眠闹铃**：即使平板休眠熄屏，到点准时高优先级唤醒并播报打卡提醒。
-            5. **多模型 AI 语音伴读**：支持阿里通义 CosyVoice2、微软 Azure、谷歌 Cloud 以及本地系统离线语音。
-            6. **Cloudflare KV 云端实时双向同步**：跨设备无缝同步，离线自动保底。
+            1. **App 内置在线检测更新与覆盖安装**：自动比对云端 Release，一键极速下载并通过系统 PackageInstaller 自动覆盖升级，保留所有历史打卡与游戏数据。
+            2. **时间完全解耦与自由输入**：家长端输入框任意填入分钟数（单位：分钟），每个学科奖励、历史补卡与手动调账均不限时间，杜绝任何数值写死。
+            3. **全科打卡好习惯动态激励**：根据实际启用的学科数量动态判定，只要完成全部基础打卡即可解锁好习惯奖励。
+            4. **极简 iOS 风格上下滚轮时间选择器**：定时闹铃设置支持类似 iOS 原生的上下滑动与惯性滚动。
+            5. **Android 原生轻量壳 + 系统级休眠闹铃**：即使平板休眠熄屏，到点准时高优先级唤醒并播报打卡提醒。
+            6. **多模型 AI 语音伴读**：支持阿里通义 CosyVoice2、微软 Azure、谷歌 Cloud 以及本地系统离线语音。
+            7. **Cloudflare KV 云端实时双向同步**：跨设备无缝同步，离线自动保底。
           draft: false
           prerelease: false
           files: |
-            output-apks/KidsTodo-Release-v1.0.0.apk
-            output-apks/KidsTodo-Debug-v1.0.0.apk
+            output-apks/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

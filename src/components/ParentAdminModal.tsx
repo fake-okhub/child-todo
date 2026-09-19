@@ -18,6 +18,12 @@ import {
   Smartphone,
   Bell,
   Clock,
+  ArrowUpCircle,
+  Download,
+  RefreshCw,
+  ShieldCheck,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import type {
   TaskTemplate,
@@ -39,6 +45,10 @@ import {
   isAndroidApp,
   syncDailyReminderToNative,
   testNativeReminder,
+  getNativeAppVersion,
+  checkAppUpdate,
+  triggerNativeUpdateDownload,
+  type AppUpdateInfo,
 } from '../utils/androidBridge';
 import { IOSTimeWheelPicker } from './common/IOSTimeWheelPicker';
 
@@ -134,10 +144,88 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
   todayTasks,
   onUpdateTodayTasks,
 }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'calendar' | 'voice' | 'switch' | 'reminder'>('templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'calendar' | 'voice' | 'switch' | 'reminder' | 'update'>('templates');
   const [selectedTemplateIndex, setSelectedTemplateIndex] = useState<number>(0);
   const [editingTemplates, setEditingTemplates] = useState<TaskTemplate[]>(templates);
   const [testReminderSent, setTestReminderSent] = useState<boolean>(false);
+
+  // Online Update state
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; current: number; total: number } | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadCompleted, setDownloadCompleted] = useState<boolean>(false);
+
+  // Set up window download callbacks from Native Android UpdateManager
+  useEffect(() => {
+    window.onUpdateDownloadProgress = (percent: number, current: number, total: number) => {
+      setIsDownloading(true);
+      setDownloadProgress({ percent, current, total });
+    };
+    window.onUpdateDownloadSuccess = (_path: string) => {
+      setIsDownloading(false);
+      setDownloadCompleted(true);
+    };
+    window.onUpdateDownloadError = (err: string) => {
+      setIsDownloading(false);
+      setUpdateError('下载更新包失败: ' + err);
+    };
+
+    return () => {
+      window.onUpdateDownloadProgress = undefined;
+      window.onUpdateDownloadSuccess = undefined;
+      window.onUpdateDownloadError = undefined;
+    };
+  }, []);
+
+  const handleCheckUpdate = async (silent = false) => {
+    setIsCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const info = await checkAppUpdate();
+      setUpdateInfo(info);
+      if (!silent) {
+        soundEngine.playCoin();
+      }
+    } catch (e: any) {
+      console.error('Update check failed:', e);
+      if (!silent) {
+        setUpdateError(e.message || '检测更新失败，请检查网络连接');
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  // Check update silently when opening modal
+  useEffect(() => {
+    if (isOpen) {
+      handleCheckUpdate(true);
+    }
+  }, [isOpen]);
+
+  const handleStartDownloadAndInstall = () => {
+    if (!updateInfo) return;
+    soundEngine.playPop();
+    setIsDownloading(true);
+    setDownloadProgress({ percent: 0, current: 0, total: updateInfo.fileSize || 0 });
+    setUpdateError(null);
+    setDownloadCompleted(false);
+
+    if (isAndroidApp()) {
+      const ok = triggerNativeUpdateDownload(updateInfo.downloadUrl, updateInfo.latestVersion);
+      if (!ok) {
+        setIsDownloading(false);
+        setUpdateError('无法唤起原生下载器，正为您打开浏览器下载...');
+        window.open(updateInfo.downloadUrl, '_blank');
+      }
+    } else {
+      // In web browser
+      setIsDownloading(false);
+      window.open(updateInfo.downloadUrl, '_blank');
+    }
+  };
 
   // History date selection
   const todayStr = getTodayDateString();
@@ -635,6 +723,22 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
             >
               <Gamepad2 className="w-3.5 h-3.5 text-red-500" />
               <span>开启周末畅玩</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundEngine.playPop();
+                setActiveTab('update');
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                activeTab === 'update' ? 'bg-white shadow text-slate-900' : 'text-slate-600'
+              }`}
+            >
+              <ArrowUpCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>版本与更新</span>
+              {updateInfo?.hasUpdate && (
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+              )}
             </button>
           </div>
         </div>
@@ -1972,6 +2076,257 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: 版本与更新 (Software Version & Online Update) */}
+          {activeTab === 'update' && (
+            <div className="space-y-4">
+              {/* Card 1: App Info & Status */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-md shadow-emerald-200">
+                      <ArrowUpCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-black text-slate-800">KidsTodo 小勇士自律打卡</h4>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-black bg-emerald-100 text-emerald-800">
+                          v{updateInfo?.currentVersion || getNativeAppVersion()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        {isAndroidApp()
+                          ? '🟢 Android 原生应用环境（支持系统级休眠闹铃与自动覆盖安装）'
+                          : '🌐 Web 云端运行环境（iPad / 电脑浏览器已自动保持云端最新）'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCheckUpdate(false)}
+                    disabled={isCheckingUpdate || isDownloading}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 active:scale-95 text-white text-xs font-black flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
+                  >
+                    {isCheckingUpdate ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>正在检测...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>立即检测新版本</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Error Banner if any */}
+                {updateError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>{updateError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckUpdate(false)}
+                      className="text-xs underline font-bold hover:text-rose-900"
+                    >
+                      重试
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Update Detection Result */}
+              {updateInfo ? (
+                updateInfo.hasUpdate ? (
+                  // New Version Available
+                  <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-white p-5 rounded-2xl border-2 border-emerald-400 shadow-md space-y-4">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500 text-white text-xs font-black shadow-xs">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>发现新版本！</span>
+                        </div>
+                        <h3 className="text-lg font-black text-slate-900">{updateInfo.releaseTitle}</h3>
+                        <p className="text-xs text-slate-500">
+                          发布时间: {updateInfo.publishedAt ? new Date(updateInfo.publishedAt).toLocaleString() : '最新'}
+                          {updateInfo.fileSize && (
+                            <span className="ml-2 font-mono font-bold text-slate-600">
+                              (安装包大小: {(updateInfo.fileSize / (1024 * 1024)).toFixed(1)} MB)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-xs">
+                        <div className="text-center">
+                          <span className="text-[10px] text-slate-400 font-bold block">当前版本</span>
+                          <span className="text-xs font-mono font-black text-slate-600">
+                            v{updateInfo.currentVersion}
+                          </span>
+                        </div>
+                        <span className="text-emerald-500 font-black">➔</span>
+                        <div className="text-center">
+                          <span className="text-[10px] text-emerald-600 font-bold block">最新版本</span>
+                          <span className="text-xs font-mono font-black text-emerald-700">
+                            v{updateInfo.latestVersion}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Release Notes */}
+                    {updateInfo.releaseNotes && (
+                      <div className="space-y-1.5">
+                        <h5 className="text-xs font-bold text-slate-700">📋 更新日志与更新内容:</h5>
+                        <div className="bg-white/90 backdrop-blur-xs p-3.5 rounded-xl border border-emerald-200 text-xs text-slate-700 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed shadow-inner">
+                          {updateInfo.releaseNotes}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Download Progress Bar */}
+                    {isDownloading && downloadProgress && (
+                      <div className="bg-white p-3.5 rounded-xl border border-emerald-300 space-y-2 shadow-xs">
+                        <div className="flex justify-between text-xs font-bold text-slate-700">
+                          <span className="flex items-center gap-1.5">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                            <span>正在下载更新包...</span>
+                          </span>
+                          <span className="font-mono text-emerald-700 font-black">
+                            {downloadProgress.percent}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                          <div
+                            className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full transition-all duration-300 ease-out shadow-xs"
+                            style={{ width: `${Math.min(100, Math.max(0, downloadProgress.percent))}%` }}
+                          />
+                        </div>
+                        {downloadProgress.total > 0 && (
+                          <div className="text-[11px] text-slate-500 font-mono text-right">
+                            {(downloadProgress.current / (1024 * 1024)).toFixed(1)} MB / {(downloadProgress.total / (1024 * 1024)).toFixed(1)} MB
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Download Success Notice */}
+                    {downloadCompleted && (
+                      <div className="p-3.5 bg-emerald-100/80 border border-emerald-300 rounded-xl text-xs text-emerald-900 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">更新包已下载完成！系统安装器启动中...</p>
+                          <p className="text-[11px] text-emerald-700 mt-0.5">
+                            若平板弹出“允许安装未知应用”，请开启权限后返回，系统将自动继续完成覆盖安装。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="pt-2 flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleStartDownloadAndInstall}
+                        disabled={isDownloading}
+                        className="flex-1 min-w-[200px] py-3 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white font-black text-sm shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {isDownloading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>正在下载更新包 ({downloadProgress?.percent || 0}%)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4" />
+                            <span>
+                              {isAndroidApp() ? '立即下载并执行覆盖安装' : '下载最新 Android APK 安装包'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={updateInfo.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="py-3 px-4 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>浏览器备用下载</span>
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  // Up to Date
+                  <div className="bg-emerald-50/60 p-6 rounded-2xl border border-emerald-200 text-center space-y-3">
+                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
+                      <ShieldCheck className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-emerald-900">当前已是最新版本！</h4>
+                      <p className="text-xs text-emerald-700 mt-1">
+                        本地与云端版本均为 v{updateInfo.currentVersion}，无需更新，请放心使用。
+                      </p>
+                    </div>
+                    <div className="pt-2 flex justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleCheckUpdate(false)}
+                        disabled={isCheckingUpdate}
+                        className="px-4 py-2 rounded-xl bg-white border border-emerald-300 hover:bg-emerald-50 text-xs font-bold text-emerald-800 shadow-xs flex items-center gap-1.5 transition-all"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>重新检测</span>
+                      </button>
+                      <a
+                        href="https://github.com/fake-okhub/child-todo/releases"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-xs flex items-center gap-1.5 transition-all"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>查看历史发布版本</span>
+                      </a>
+                    </div>
+                  </div>
+                )
+              ) : (
+                // Initial State
+                <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 text-center space-y-2">
+                  <ArrowUpCircle className="w-8 h-8 text-slate-400 mx-auto" />
+                  <p className="text-xs text-slate-500 font-medium">点击上方“立即检测新版本”按钮，自动对比云端 GitHub Release</p>
+                </div>
+              )}
+
+              {/* Card 3: Seamless Installation Guide */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h5 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-slate-500" />
+                  <span>关于在线更新与覆盖安装说明:</span>
+                </h5>
+                <ul className="text-[11px] text-slate-500 space-y-1 list-disc pl-4 leading-relaxed">
+                  <li>
+                    <strong className="text-slate-700">平滑覆盖升级：</strong>
+                    新版本采用统一官方签名，直接覆盖安装，无需卸载旧应用，历史打卡和游戏时长数据完全保留。
+                  </li>
+                  <li>
+                    <strong className="text-slate-700">权限说明：</strong>
+                    Android 8.0+ 首次在线更新时，系统可能会提示“允许安装未知应用”，在设置中开启该权限后返回即可继续安装。
+                  </li>
+                  <li>
+                    <strong className="text-slate-700">自动同步保障：</strong>
+                    无论是在平板 App 还是网页端，打卡数据均通过 Cloudflare KV 云端实时双向加密同步。
+                  </li>
+                </ul>
               </div>
             </div>
           )}

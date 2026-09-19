@@ -4,6 +4,7 @@
 
 export interface Env {
   TODO_KV?: KVNamespace;
+  GITHUB_TOKEN?: string;
   ASSETS?: {
     fetch: (request: Request) => Promise<Response>;
   };
@@ -35,6 +36,153 @@ export default {
         JSON.stringify({ status: 'ok', service: 'kidstodo-app', domain: 'kidstodo.jac.edu.kg' }),
         { headers }
       );
+    }
+
+    // 1.1 App Update Check Endpoint (Queries GitHub Releases with edge CDN & KV caching)
+    if (url.pathname === '/api/check-update') {
+      try {
+        const cacheKey = 'app_latest_release_cache';
+        if (env.TODO_KV) {
+          const cached = await env.TODO_KV.get(cacheKey);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              return new Response(JSON.stringify(parsed), {
+                headers: {
+                  ...headers,
+                  'Cache-Control': 'public, max-age=60, s-maxage=300',
+                  'X-Cache': 'HIT',
+                },
+              });
+            } catch {
+              // ignore invalid cache
+            }
+          }
+        }
+
+        const ghHeaders: Record<string, string> = {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/vnd.github.v3+json',
+        };
+        if (env.GITHUB_TOKEN) {
+          ghHeaders['Authorization'] = `token ${env.GITHUB_TOKEN}`;
+        }
+
+        const ghRes = await fetch('https://api.github.com/repos/fake-okhub/child-todo/releases/latest', {
+          headers: ghHeaders,
+        });
+
+        if (!ghRes.ok) {
+          return new Response(
+            JSON.stringify({ success: false, error: `GitHub API error: ${ghRes.statusText}` }),
+            { status: ghRes.status, headers }
+          );
+        }
+
+        const release = (await ghRes.json()) as any;
+        const tagName = release.tag_name || 'v1.0.0';
+        const versionClean = tagName.replace(/^v/, '');
+
+        let releaseApk = null;
+        let debugApk = null;
+
+        if (Array.isArray(release.assets)) {
+          for (const asset of release.assets) {
+            const name = (asset.name || '').toLowerCase();
+            if (name.includes('release') && name.endsWith('.apk')) {
+              releaseApk = {
+                name: asset.name,
+                downloadUrl: asset.browser_download_url,
+                apiUrl: asset.url,
+                size: asset.size,
+              };
+            } else if (name.includes('debug') && name.endsWith('.apk')) {
+              debugApk = {
+                name: asset.name,
+                downloadUrl: asset.browser_download_url,
+                apiUrl: asset.url,
+                size: asset.size,
+              };
+            }
+          }
+          if (!releaseApk && release.assets.length > 0) {
+            const first = release.assets[0];
+            releaseApk = {
+              name: first.name,
+              downloadUrl: first.browser_download_url,
+              apiUrl: first.url,
+              size: first.size,
+            };
+          }
+        }
+
+        const payload = {
+          success: true,
+          tagName,
+          version: versionClean,
+          name: release.name || `KidsTodo ${tagName}`,
+          publishedAt: release.published_at,
+          body: release.body || '',
+          htmlUrl: release.html_url,
+          releaseApk,
+          debugApk,
+        };
+
+        if (env.TODO_KV) {
+          try {
+            await env.TODO_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: 300 });
+          } catch {
+            // ignore KV put error
+          }
+        }
+
+        return new Response(JSON.stringify(payload), {
+          headers: {
+            ...headers,
+            'Cache-Control': 'public, max-age=60, s-maxage=300',
+          },
+        });
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message }),
+          { status: 500, headers }
+        );
+      }
+    }
+
+    // 1.2 Direct APK Download & Redirect endpoint
+    if (url.pathname === '/api/download-apk' || url.pathname === '/download') {
+      try {
+        const type = url.searchParams.get('type') || 'release';
+        const ghHeaders: Record<string, string> = {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/vnd.github.v3+json',
+        };
+        if (env.GITHUB_TOKEN) {
+          ghHeaders['Authorization'] = `token ${env.GITHUB_TOKEN}`;
+        }
+        const ghRes = await fetch('https://api.github.com/repos/fake-okhub/child-todo/releases/latest', {
+          headers: ghHeaders,
+        });
+
+        if (ghRes.ok) {
+          const release = (await ghRes.json()) as any;
+          if (Array.isArray(release.assets)) {
+            const asset = release.assets.find((a: any) =>
+              type === 'debug'
+                ? a.name.toLowerCase().includes('debug') && a.name.endsWith('.apk')
+                : a.name.toLowerCase().includes('release') && a.name.endsWith('.apk')
+            ) || release.assets[0];
+
+            if (asset && asset.browser_download_url) {
+              return Response.redirect(asset.browser_download_url, 302);
+            }
+          }
+        }
+        return new Response('APK Asset Not Found', { status: 404 });
+      } catch (err: any) {
+        return new Response('Download error: ' + err.message, { status: 500 });
+      }
     }
 
     // 2. Cloud Sync endpoint: GET to load data, POST to save data
