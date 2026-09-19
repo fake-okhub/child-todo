@@ -1,10 +1,15 @@
-name: Build Android APKs
+name: Build Android APKs & Release
 
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -37,16 +42,45 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk output-apks/KidsTodo-Debug-v1.0.0.apk
           ls -lh output-apks/
 
-      - name: Upload Signed Release APK
+      - name: Upload Signed Release APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: KidsTodo-Release-APK
           path: output-apks/KidsTodo-Release-v1.0.0.apk
           retention-days: 30
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: KidsTodo-Debug-APK
           path: output-apks/KidsTodo-Debug-v1.0.0.apk
           retention-days: 30
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }}
+          name: "KidsTodo ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0' }} 正式发布版"
+          body: |
+            ### 🎮 KidsTodo - 一年级儿童自律打卡与 Switch 游戏激励系统
+
+            #### 📱 APK 直接下载（免解压，点击即可在安卓平板直接安装）：
+            - 🚀 **正式正式版（推荐日常使用）**：[KidsTodo-Release-v1.0.0.apk](https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk)
+              - 采用正式 RSA 签名，系统级高优先级准时闹铃，后台唤醒。
+            - 🛠️ **调试版（排查日志使用）**：[KidsTodo-Debug-v1.0.0.apk](https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk)
+
+            #### ✨ 核心特性与更新：
+            1. **时间完全解耦与自由输入**：家长端输入框任意填入分钟数（单位：分钟），每个学科奖励、历史补卡与手动调账均不限时间，杜绝任何数值写死。
+            2. **全科打卡好习惯动态激励**：根据实际启用的学科数量动态判定，只要完成全部基础打卡即可解锁好习惯奖励。
+            3. **极简 iOS 风格上下滚轮时间选择器**：定时闹铃设置支持类似 iOS 原生的上下滑动与惯性滚动。
+            4. **Android 原生轻量壳 + 系统级休眠闹铃**：即使平板休眠熄屏，到点准时高优先级唤醒并播报打卡提醒。
+            5. **多模型 AI 语音伴读**：支持阿里通义 CosyVoice2、微软 Azure、谷歌 Cloud 以及本地系统离线语音。
+            6. **Cloudflare KV 云端实时双向同步**：跨设备无缝同步，离线自动保底。
+          draft: false
+          prerelease: false
+          files: |
+            output-apks/KidsTodo-Release-v1.0.0.apk
+            output-apks/KidsTodo-Debug-v1.0.0.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
