@@ -99,10 +99,14 @@ export function App() {
     );
   }, [settings]);
 
-  // Today stats
+  // Today stats & dynamic target
   const completedTasks = tasks.filter((t) => t.isCompleted);
   const todayEarnedMinutes = completedTasks.reduce((sum, t) => sum + t.rewardMinutes, 0);
-  const fiveMainSubjectsDone = tasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5;
+  const regularTasks = tasks.filter((t) => !t.isAutoHabit);
+  const allRegularTasksDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
+  const plannedMinutes = regularTasks.reduce((sum, t) => sum + t.rewardMinutes, 0);
+  const habitBonusMins = settings.habitRewardMinutes ?? 5;
+  const dynamicDailyMax = plannedMinutes > 0 ? plannedMinutes + habitBonusMins : 30;
 
   // Filter tasks by subject
   const filteredTasks = tasks.filter((t) => {
@@ -113,7 +117,7 @@ export function App() {
   // Toggle task completion
   const handleToggleComplete = (task: TaskItem) => {
     if (!task.isCompleted) {
-      // Completing task (+5 mins fixed per subject)
+      // Completing task (+ task.rewardMinutes)
       const minutesToAdd = task.rewardMinutes || 5;
       let nextBalance = settings.balanceMinutes + minutesToAdd;
 
@@ -121,25 +125,25 @@ export function App() {
         t.id === task.id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t
       );
 
-      // Check Rule 2: "好习惯自动加5分钟，好习惯的标准是对应每天5个课完成之后，自动加入好习惯"
-      const nonHabitCompletedCount = nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length;
+      // Check Good Habit: When all regular scheduled tasks are completed, award habit reward
+      const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
+      const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
       const alreadyHasAutoHabit = nextTasks.some((t) => t.isAutoHabit);
 
-      if (nonHabitCompletedCount >= 5 && !alreadyHasAutoHabit) {
-        // Automatically inject and complete the Good Habit task!
+      if (isAllRegularDone && !alreadyHasAutoHabit) {
         const autoHabit: TaskItem = {
           id: `habit-${Date.now()}`,
           subject: 'custom',
-          title: '好习惯自动奖励：5门学科全勤完成！',
-          description: '今日已自觉按时完成所有基础学科，系统自动解锁好习惯大奖',
-          rewardMinutes: 5,
+          title: '好习惯自动奖励：当日全勤满分！',
+          description: '今日已自觉按时完成全部学科任务，系统自动解锁好习惯大奖',
+          rewardMinutes: habitBonusMins,
           isCompleted: true,
           completedAt: new Date().toISOString(),
           isAutoHabit: true,
         };
 
         nextTasks = [...nextTasks, autoHabit];
-        nextBalance += 5;
+        nextBalance += habitBonusMins;
         setJustEarnedHabit(true);
         setTimeout(() => setJustEarnedHabit(false), 5000);
       }
@@ -149,20 +153,25 @@ export function App() {
 
       // Update today's record in history
       const today = getTodayDateString();
+      const updatedRegular = nextTasks.filter((t) => !t.isAutoHabit);
       const updatedDayRecord: DayRecord = {
         date: today,
         tasks: nextTasks,
         earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0),
-        hasFullFiveCompleted: nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+        hasFullFiveCompleted: updatedRegular.length > 0 && updatedRegular.every((t) => t.isCompleted),
         hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
         allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
       };
       saveDayRecord(updatedDayRecord);
       setHistory((prev) => ({ ...prev, [today]: updatedDayRecord }));
 
-      // Check Rule 3: "每周按5个工作日计算。如果每天都完成打卡，且没有遗漏，加15分钟。"
+      // Check Weekly Full Attendance Bonus
       const updatedHistory = { ...history, [today]: updatedDayRecord };
-      const attendanceCheck = checkWeeklyFullAttendanceBonus(updatedHistory, nextBalance);
+      const attendanceCheck = checkWeeklyFullAttendanceBonus(
+        updatedHistory,
+        nextBalance,
+        settings.weeklyBonusMinutes ?? 15
+      );
       if (attendanceCheck.isEligible) {
         setSettings((prev) => ({ ...prev, balanceMinutes: attendanceCheck.newBalance }));
         setJustEarnedWeeklyBonus(true);
@@ -182,12 +191,13 @@ export function App() {
         t.id === task.id ? { ...t, isCompleted: false, completedAt: undefined } : t
       );
 
-      // If undoing brought completed non-habit tasks below 5, remove auto habit if present
-      const nonHabitCompletedCount = nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length;
-      if (nonHabitCompletedCount < 5) {
+      // If undoing brought regular tasks below 100%, remove auto habit if present
+      const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
+      const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
+      if (!isAllRegularDone) {
         const habitTask = nextTasks.find((t) => t.isAutoHabit);
         if (habitTask && habitTask.isCompleted) {
-          const balanceWithoutHabit = Math.max(0, nextBalance - 5);
+          const balanceWithoutHabit = Math.max(0, nextBalance - (habitTask.rewardMinutes || 5));
           setSettings((prev) => ({ ...prev, balanceMinutes: balanceWithoutHabit }));
         }
         nextTasks = nextTasks.filter((t) => !t.isAutoHabit);
@@ -196,11 +206,12 @@ export function App() {
       setTasks(nextTasks);
 
       const today = getTodayDateString();
+      const updatedRegular = nextTasks.filter((t) => !t.isAutoHabit);
       const updatedDayRecord: DayRecord = {
         date: today,
         tasks: nextTasks,
         earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0),
-        hasFullFiveCompleted: nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+        hasFullFiveCompleted: updatedRegular.length > 0 && updatedRegular.every((t) => t.isCompleted),
         hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
         allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
       };
@@ -246,7 +257,7 @@ export function App() {
       <SwitchConsole
         balanceMinutes={settings.balanceMinutes}
         todayEarnedMinutes={todayEarnedMinutes}
-        dailyMaxMinutes={30}
+        dailyMaxMinutes={dynamicDailyMax}
         completedTasksCount={completedTasks.length}
         totalTasksCount={tasks.length}
         onOpenPlayModal={() => setIsPlayModalOpen(true)}
@@ -260,21 +271,21 @@ export function App() {
               <OneUpMushroom className="w-10 h-10 flex-shrink-0" />
               <div>
                 <h4 className="font-black text-base sm:text-lg">
-                  🎉 触发好习惯奖励！自动 +5 分钟 Switch！
+                  🎉 触发好习惯奖励！自动 +{habitBonusMins} 分钟 Switch！
                 </h4>
                 <p className="text-xs text-white/90">
-                  今天 5 门课已全部按时完成，好习惯奖励自动到账！
+                  今天全部学科任务已按时完成，好习惯奖励自动到账！
                 </p>
               </div>
             </div>
             <span className="text-xs bg-black/20 px-3 py-1 rounded-xl font-black font-mono">
-              +5m
+              +{habitBonusMins}m
             </span>
           </div>
         </div>
       )}
 
-      {/* Weekly Full Attendance Bonus Banner (+15 mins) */}
+      {/* Weekly Full Attendance Bonus Banner */}
       {justEarnedWeeklyBonus && (
         <div className="w-full max-w-4xl mx-auto px-4 my-2">
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-3xl p-5 text-white shadow-2xl flex items-center justify-between animate-pulse">
@@ -282,7 +293,7 @@ export function App() {
               <Trophy className="w-12 h-12 text-yellow-200" />
               <div>
                 <h4 className="font-black text-lg sm:text-xl">
-                  🏆 周工作日全勤大奖达成！额外赠送 +15 分钟！
+                  🏆 周工作日全勤大奖达成！额外赠送 +{settings.weeklyBonusMinutes ?? 15} 分钟！
                 </h4>
                 <p className="text-xs sm:text-sm text-white/90">
                   本周一至周五 5 个工作日每日均满勤打卡，太厉害啦！
@@ -315,15 +326,15 @@ export function App() {
                 <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 text-xs font-mono font-black">
                   {completedTasks.length} / {tasks.length} 已完成
                 </span>
-                {fiveMainSubjectsDone && (
+                {allRegularTasksDone && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                    ✓ 5科达标
+                    ✓ 全科达标
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                <span>每科固定 +5 分钟 • 5科全做自动加好习惯</span>
+                <span>做完可累计奖励时长 • 全部完成自动加好习惯</span>
               </div>
             </div>
 

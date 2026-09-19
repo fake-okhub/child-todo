@@ -146,6 +146,10 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
   // New task form for historical day
   const [newHistSubject, setNewHistSubject] = useState<SubjectType>('reading');
   const [newHistTitle, setNewHistTitle] = useState<string>('');
+  const [newHistMinutes, setNewHistMinutes] = useState<number>(5);
+
+  // Manual balance adjustment input
+  const [adjustInput, setAdjustInput] = useState<number>(10);
 
   // Voice test phrase
   const [previewText, setPreviewText] = useState<string>(
@@ -320,22 +324,25 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
         completedAt: new Date().toISOString(),
       };
 
-      // Check if 5 regular subjects completed -> unlock auto habit (+5m)
-      const nonHabitDone = nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length;
+      // Check if all regular subjects completed -> unlock auto habit
+      const regularTasks = nextTasks.filter((t) => !t.isAutoHabit);
+      const isAllRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
       const alreadyHasHabit = nextTasks.some((t) => t.isAutoHabit);
-      if (nonHabitDone >= 5 && !alreadyHasHabit) {
+      const habitMins = settings.habitRewardMinutes ?? 5;
+
+      if (isAllRegularDone && !alreadyHasHabit) {
         const autoHabit: TaskItem = {
           id: `hist-habit-${date}-${Date.now()}`,
           subject: 'custom',
-          title: '好习惯自动奖励：5门学科全勤完成！',
+          title: '好习惯自动奖励：当日全勤满分！',
           description: '当日已自觉按时完成所有基础学科，系统自动解锁好习惯大奖',
-          rewardMinutes: 5,
+          rewardMinutes: habitMins,
           isCompleted: true,
           completedAt: new Date().toISOString(),
           isAutoHabit: true,
         };
         nextTasks.push(autoHabit);
-        balanceDelta += 5;
+        balanceDelta += habitMins;
       }
     } else {
       soundEngine.playPop();
@@ -346,22 +353,24 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
         completedAt: undefined,
       };
 
-      // If non-habit drops below 5, remove auto habit if present
-      const nonHabitDone = nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length;
-      if (nonHabitDone < 5) {
+      // If regular tasks drop below 100%, remove auto habit if present
+      const regularTasks = nextTasks.filter((t) => !t.isAutoHabit);
+      const isAllRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
+      if (!isAllRegularDone) {
         const habitTask = nextTasks.find((t) => t.isAutoHabit);
         if (habitTask && habitTask.isCompleted) {
-          balanceDelta -= 5;
+          balanceDelta -= (habitTask.rewardMinutes || 5);
         }
         nextTasks = nextTasks.filter((t) => !t.isAutoHabit);
       }
     }
 
+    const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
     const updatedDayRecord: DayRecord = {
       date,
       tasks: nextTasks,
       earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((s, t) => s + t.rewardMinutes, 0),
-      hasFullFiveCompleted: nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+      hasFullFiveCompleted: currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted),
       hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
     };
@@ -388,21 +397,23 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
 
     let nextTasks = dayRec.tasks.filter((t) => t.id !== taskId);
 
-    // If non-habit drops below 5, remove auto habit
-    const nonHabitDone = nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length;
-    if (nonHabitDone < 5) {
+    // If regular tasks drop below 100%, remove auto habit
+    const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
+    const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
+    if (!isAllRegularDone) {
       const habitTask = nextTasks.find((t) => t.isAutoHabit);
       if (habitTask && habitTask.isCompleted) {
-        balanceDelta -= 5;
+        balanceDelta -= (habitTask.rewardMinutes || 5);
       }
       nextTasks = nextTasks.filter((t) => !t.isAutoHabit);
     }
 
+    const finalRegular = nextTasks.filter((t) => !t.isAutoHabit);
     const updatedDayRecord: DayRecord = {
       date,
       tasks: nextTasks,
       earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((s, t) => s + t.rewardMinutes, 0),
-      hasFullFiveCompleted: nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+      hasFullFiveCompleted: finalRegular.length > 0 && finalRegular.every((t) => t.isCompleted),
       hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
     };
@@ -430,16 +441,17 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
       subject: newHistSubject,
       title: newHistTitle.trim(),
       description: '家长历史补录任务',
-      rewardMinutes: 5,
+      rewardMinutes: newHistMinutes || 5,
       isCompleted: false,
     };
 
     const nextTasks = [...currentTasks, newTask];
+    const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
     const updatedDayRecord: DayRecord = {
       date,
       tasks: nextTasks,
       earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((s, t) => s + t.rewardMinutes, 0),
-      hasFullFiveCompleted: nextTasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+      hasFullFiveCompleted: currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted),
       hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
     };
@@ -468,19 +480,21 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
 
     // Check if auto habit exists
     const hasHabit = nextTasks.some((t) => t.isAutoHabit);
-    if (!hasHabit && nextTasks.length >= 5) {
+    const habitMins = settings.habitRewardMinutes ?? 5;
+    const regularTasks = nextTasks.filter((t) => !t.isAutoHabit);
+    if (!hasHabit && regularTasks.length > 0) {
       const autoHabit: TaskItem = {
         id: `hist-habit-${date}-${Date.now()}`,
         subject: 'custom',
-        title: '好习惯自动奖励：5门学科全勤完成！',
+        title: '好习惯自动奖励：当日全勤满分！',
         description: '当日已自觉按时完成所有基础学科，系统自动解锁好习惯大奖',
-        rewardMinutes: 5,
+        rewardMinutes: habitMins,
         isCompleted: true,
         completedAt: new Date().toISOString(),
         isAutoHabit: true,
       };
       nextTasks.push(autoHabit);
-      addedMinutes += 5;
+      addedMinutes += habitMins;
     }
 
     const updatedDayRecord: DayRecord = {
@@ -655,10 +669,85 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                 </button>
               </div>
 
+              {/* Child Profile & Incentive Rules */}
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-3.5 rounded-2xl border border-indigo-200">
+                <div className="text-xs font-black text-indigo-900 mb-2.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <span>⚙️ 孩子档案与激励时间规则配置</span>
+                  </span>
+                  <span className="text-[11px] text-indigo-600 font-normal">
+                    自由配置时长，绝不锁死任何时间数值
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Child Name */}
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                    <label className="text-[11px] font-bold text-slate-600 mb-1">
+                      👦 孩子称呼：
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.childName || '诚诚'}
+                      onChange={(e) => onUpdateSettings({ ...settings, childName: e.target.value.trim() || '宝贝' })}
+                      className="px-2.5 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                      placeholder="如：诚诚"
+                    />
+                  </div>
+
+                  {/* Daily Habit Bonus Minutes */}
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                    <label className="text-[11px] font-bold text-slate-600 mb-1">
+                      ⭐ 当日全勤好习惯奖励：
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-bold text-slate-500">+</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={settings.habitRewardMinutes ?? 5}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...settings,
+                            habitRewardMinutes: Math.max(1, parseInt(e.target.value) || 1),
+                          })
+                        }
+                        className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-slate-600">分钟</span>
+                    </div>
+                  </div>
+
+                  {/* Weekly Full Attendance Bonus Minutes */}
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                    <label className="text-[11px] font-bold text-slate-600 mb-1">
+                      🏆 工作日五天全勤大奖：
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-bold text-slate-500">+</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="240"
+                        value={settings.weeklyBonusMinutes ?? 15}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...settings,
+                            weeklyBonusMinutes: Math.max(1, parseInt(e.target.value) || 1),
+                          })
+                        }
+                        className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-slate-600">分钟</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Requirement 1: Subject Checklist (运动项可在后台勾选，默认仅5项) */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                  <span>学科包含勾选（默认5门核心学科，完成5门后自动解锁好习惯）：</span>
+                  <span>学科包含勾选（完成所选全部科目后自动解锁好习惯奖励）：</span>
                   <span className="text-[11px] text-amber-800 font-mono font-bold">
                     当前启用 {currentTemplate.tasks.length} 科
                   </span>
@@ -702,7 +791,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
               {/* Template Tasks Editor */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-                  <span>模板详细任务项（每科完成固定奖励 +5 分钟）：</span>
+                  <span>模板详细任务项（每科完成奖励可灵活设定）：</span>
                   <button
                     onClick={handleAddTaskToTemplate}
                     className="text-emerald-700 hover:underline flex items-center gap-1 font-bold"
@@ -745,10 +834,23 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                       className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800"
                     />
 
-                    {/* Fixed 5 mins indicator */}
-                    <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-xs font-bold font-mono">
-                      +5分钟
-                    </span>
+                    {/* Editable Reward Minutes */}
+                    <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 flex-shrink-0">
+                      <span className="text-xs font-bold text-amber-800">+</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="180"
+                        value={task.rewardMinutes ?? 5}
+                        onChange={(e) =>
+                          handleUpdateTaskInTemplate(idx, {
+                            rewardMinutes: Math.max(1, parseInt(e.target.value) || 1),
+                          })
+                        }
+                        className="w-12 text-center text-xs font-black font-mono bg-white border border-amber-300 rounded-lg py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                      <span className="text-xs font-bold text-amber-800">分钟</span>
+                    </div>
 
                     {/* Delete */}
                     <button
@@ -896,7 +998,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                               </span>
                               {task.isAutoHabit && (
                                 <span className="text-[10px] text-emerald-700 font-bold">
-                                  ★ 5科达标自动好习惯奖励
+                                  ★ 全科达标好习惯自动奖励
                                 </span>
                               )}
                             </div>
@@ -965,10 +1067,23 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                         className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800"
                       />
 
+                      <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-slate-300 flex-shrink-0">
+                        <span className="text-xs font-bold text-slate-500">+</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="180"
+                          value={newHistMinutes}
+                          onChange={(e) => setNewHistMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-12 text-center text-xs font-black font-mono border-none focus:outline-none"
+                        />
+                        <span className="text-xs font-bold text-slate-500">分钟</span>
+                      </div>
+
                       <button
                         onClick={() => handleAddHistoryTask(selectedHistoryDate)}
                         disabled={!newHistTitle.trim()}
-                        className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition-all disabled:opacity-50 flex items-center justify-center gap-1"
+                        className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black transition-all disabled:opacity-50 flex items-center justify-center gap-1 flex-shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>添加至该日</span>
@@ -1762,29 +1877,67 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
               </div>
 
               {/* Manual Balance Adjustment */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <h4 className="text-xs font-bold text-slate-700 mb-2">
-                  家长手动调账（用于额外鼓励或纠错）：
-                </h4>
-                <div className="flex gap-2">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-800">
+                    家长自由调账（输入任意分钟数奖励或扣除）：
+                  </h4>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    当前金库：<span className="font-mono text-amber-600 font-black">{settings.balanceMinutes}</span> 分钟
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border-2 border-slate-300">
+                    <span className="text-xs font-bold text-slate-500">时长:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1000"
+                      value={adjustInput}
+                      onChange={(e) => setAdjustInput(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 text-center text-sm font-black font-mono border-none focus:outline-none text-slate-900"
+                    />
+                    <span className="text-xs font-bold text-slate-600">分钟</span>
+                  </div>
+
                   <button
-                    onClick={() => handleAdjustBalance(-10)}
-                    className="px-4 py-2 rounded-xl bg-red-100 text-red-700 text-xs font-bold hover:bg-red-200"
+                    type="button"
+                    onClick={() => handleAdjustBalance(adjustInput)}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm flex items-center gap-1 transition-all active:scale-95"
                   >
-                    扣除 10 分钟
+                    <span>+ 奖励发放 ({adjustInput} 分钟)</span>
                   </button>
+
                   <button
-                    onClick={() => handleAdjustBalance(10)}
-                    className="px-4 py-2 rounded-xl bg-emerald-100 text-emerald-700 text-xs font-bold hover:bg-emerald-200"
+                    type="button"
+                    onClick={() => handleAdjustBalance(-adjustInput)}
+                    className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-sm flex items-center gap-1 transition-all active:scale-95"
                   >
-                    奖励 10 分钟
+                    <span>- 扣除时长 ({adjustInput} 分钟)</span>
                   </button>
-                  <button
-                    onClick={() => handleAdjustBalance(30)}
-                    className="px-4 py-2 rounded-xl bg-amber-100 text-amber-900 text-xs font-bold hover:bg-amber-200"
-                  >
-                    奖励 30 分钟大礼包
-                  </button>
+                </div>
+
+                {/* Quick select chips */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-slate-400 font-bold">快捷数字:</span>
+                  {[5, 10, 15, 20, 30, 45, 60].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => {
+                        soundEngine.playPop();
+                        setAdjustInput(val);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        adjustInput === val
+                          ? 'bg-amber-400 border-amber-500 text-slate-900 shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {val}m
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

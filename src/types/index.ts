@@ -65,5 +65,8 @@ export interface UserSettings {
   dailyReminderEnabled: boolean;
   dailyReminderTime: string; // 格式 "HH:mm"，如 "17:30"
   dailyReminderMessage: string;
+  // 自由激励规则设置（解除硬编码）
+  habitRewardMinutes?: number; // 全科完成好习惯奖励时长，默认 5 分钟
+  weeklyBonusMinutes?: number; // 工作日全勤周奖励时长，默认 15 分钟
 }
 

@@ -274,6 +274,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dailyReminderEnabled: true,
   dailyReminderTime: '17:30',
   dailyReminderMessage: '放学啦！小勇士记得完成今日 5 科打卡，积累周末 Switch 能量哦！',
+  habitRewardMinutes: 5,
+  weeklyBonusMinutes: 15,
 };
 
 export function loadSettings(): UserSettings {
@@ -367,7 +369,7 @@ export function createTasksFromTemplate(template: TaskTemplate): TaskItem[] {
     subject: t.subject,
     title: t.title,
     description: t.description,
-    rewardMinutes: 5, // 每个科目固定完成之后加5分钟
+    rewardMinutes: t.rewardMinutes || 5, // 优先采用模板中家长自定义的奖励分钟数
     isCompleted: false,
     isAutoHabit: false,
   }));
@@ -384,11 +386,13 @@ export function loadTasks(): TaskItem[] {
     // If new day, archive yesterday's state to history and re-instantiate today's list
     if (lastDate && lastDate !== today && tasks.length > 0) {
       const earned = tasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0);
+      const regularTasks = tasks.filter((t) => !t.isAutoHabit);
+      const allRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
       const dayRec: DayRecord = {
         date: lastDate,
         tasks: tasks,
         earnedMinutes: earned,
-        hasFullFiveCompleted: tasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+        hasFullFiveCompleted: allRegularDone,
         hasAutoHabit: tasks.some((t) => t.isAutoHabit && t.isCompleted),
         allCompleted: tasks.every((t) => t.isCompleted),
       };
@@ -427,11 +431,13 @@ export function saveTasks(tasks: TaskItem[]): void {
     // Also update today's record in history
     const today = getTodayDateString();
     const earned = tasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0);
+    const regularTasks = tasks.filter((t) => !t.isAutoHabit);
+    const allRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
     const dayRec: DayRecord = {
       date: today,
       tasks: tasks,
       earnedMinutes: earned,
-      hasFullFiveCompleted: tasks.filter((t) => !t.isAutoHabit && t.isCompleted).length >= 5,
+      hasFullFiveCompleted: allRegularDone,
       hasAutoHabit: tasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: tasks.length > 0 && tasks.every((t) => t.isCompleted),
     };
@@ -447,7 +453,8 @@ export function saveTasks(tasks: TaskItem[]): void {
  */
 export function checkWeeklyFullAttendanceBonus(
   history: Record<string, DayRecord>,
-  currentBalance: number
+  currentBalance: number,
+  bonusMinutes: number = 15
 ): { isEligible: boolean; newBalance: number; completedWeekdays: number } {
   const now = new Date();
   const dayOfWeek = now.getDay();
@@ -481,7 +488,7 @@ export function checkWeeklyFullAttendanceBonus(
     localStorage.setItem(bonusAwardKey, 'true');
     return {
       isEligible: true,
-      newBalance: currentBalance + 15,
+      newBalance: currentBalance + bonusMinutes,
       completedWeekdays: 5,
     };
   }
