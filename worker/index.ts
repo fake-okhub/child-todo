@@ -68,18 +68,43 @@ export default {
           ghHeaders['Authorization'] = `token ${env.GITHUB_TOKEN}`;
         }
 
-        const ghRes = await fetch('https://api.github.com/repos/fake-okhub/child-todo/releases/latest', {
-          headers: ghHeaders,
-        });
-
-        if (!ghRes.ok) {
-          return new Response(
-            JSON.stringify({ success: false, error: `GitHub API error: ${ghRes.statusText}` }),
-            { status: ghRes.status, headers }
-          );
+        let release: any = null;
+        try {
+          const ghRes = await fetch('https://api.github.com/repos/fake-okhub/child-todo/releases/latest', {
+            headers: ghHeaders,
+          });
+          if (ghRes.ok) {
+            release = await ghRes.json();
+          }
+        } catch (e) {
+          console.warn('GitHub API fetch failed, using fallback:', e);
         }
 
-        const release = (await ghRes.json()) as any;
+        // Safe fallback if GitHub rate limits or is unreachable
+        if (!release || !Array.isArray(release.assets)) {
+          release = {
+            tag_name: 'v1.0.0',
+            name: 'KidsTodo v1.0.0 正式发布版',
+            published_at: '2026-09-19T07:01:55Z',
+            body: '### 🎮 KidsTodo - 一年级儿童自律打卡与 Switch 游戏激励系统\n\n- 支持 App 内置在线检测更新与覆盖安装\n- 全新红蓝 Switch 能量小勇士官方高清图标与 Favicon',
+            html_url: 'https://github.com/fake-okhub/child-todo/releases/tag/v1.0.0',
+            assets: [
+              {
+                name: 'KidsTodo-Release-v1.0.0.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk',
+                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337289',
+                size: 4816280,
+              },
+              {
+                name: 'KidsTodo-Debug-v1.0.0.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk',
+                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337303',
+                size: 5964131,
+              },
+            ],
+          };
+        }
+
         const tagName = release.tag_name || 'v1.0.0';
         const versionClean = tagName.replace(/^v/, '');
 
@@ -150,38 +175,126 @@ export default {
       }
     }
 
-    // 1.2 Direct APK Download & Redirect endpoint
+    // 1.2 Direct APK Download & Web Landing Page endpoint
     if (url.pathname === '/api/download-apk' || url.pathname === '/download') {
       try {
         const type = url.searchParams.get('type') || 'release';
-        const ghHeaders: Record<string, string> = {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/vnd.github.v3+json',
-        };
-        if (env.GITHUB_TOKEN) {
-          ghHeaders['Authorization'] = `token ${env.GITHUB_TOKEN}`;
-        }
-        const ghRes = await fetch('https://api.github.com/repos/fake-okhub/child-todo/releases/latest', {
-          headers: ghHeaders,
-        });
+        const cacheKey = 'app_latest_release_cache';
 
-        if (ghRes.ok) {
-          const release = (await ghRes.json()) as any;
-          if (Array.isArray(release.assets)) {
-            const asset = release.assets.find((a: any) =>
-              type === 'debug'
-                ? a.name.toLowerCase().includes('debug') && a.name.endsWith('.apk')
-                : a.name.toLowerCase().includes('release') && a.name.endsWith('.apk')
-            ) || release.assets[0];
+        let releaseDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk';
+        let debugDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk';
+        let releaseVersion = 'v1.0.0';
+        let fileSizeStr = '4.6 MB';
 
-            if (asset && asset.browser_download_url) {
-              return Response.redirect(asset.browser_download_url, 302);
+        // 1. Check KV Cache first
+        if (env.TODO_KV) {
+          try {
+            const cached = await env.TODO_KV.get(cacheKey);
+            if (cached) {
+              const data = JSON.parse(cached);
+              if (data.releaseApk?.downloadUrl) releaseDownloadUrl = data.releaseApk.downloadUrl;
+              if (data.debugApk?.downloadUrl) debugDownloadUrl = data.debugApk.downloadUrl;
+              if (data.tagName) releaseVersion = data.tagName;
+              if (data.releaseApk?.size) fileSizeStr = (data.releaseApk.size / (1024 * 1024)).toFixed(1) + ' MB';
             }
+          } catch {
+            // ignore
           }
         }
-        return new Response('APK Asset Not Found', { status: 404 });
+
+        const targetDownloadUrl = type === 'debug' ? debugDownloadUrl : releaseDownloadUrl;
+
+        // If request is from API or explicit direct parameter or non-HTML client, 302 redirect directly
+        const isHtmlClient = (request.headers.get('accept') || '').includes('text/html');
+        const isDirect = url.searchParams.has('direct') || url.pathname === '/api/download-apk';
+
+        if (isDirect || !isHtmlClient) {
+          return Response.redirect(targetDownloadUrl, 302);
+        }
+
+        // Return a sleek, modern, mobile-friendly landing page with automatic download
+        const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>下载 Switch 能量小勇士 App - ${releaseVersion}</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta http-equiv="refresh" content="1;url=${targetDownloadUrl}" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 font-sans selection:bg-rose-500 selection:text-white">
+  <div class="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl text-center space-y-6">
+    <!-- App Logo Icon -->
+    <div class="relative w-24 h-24 mx-auto">
+      <div class="absolute -inset-2 bg-gradient-to-r from-rose-500 to-cyan-500 rounded-3xl blur-lg opacity-40 animate-pulse"></div>
+      <img src="/favicon.svg" alt="App Icon" class="relative w-24 h-24 rounded-2xl shadow-xl object-contain" />
+    </div>
+
+    <!-- Title & Meta -->
+    <div class="space-y-1">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
+        <span>🎮 KidsTodo · 一年级打卡与游戏激励</span>
+      </div>
+      <h1 class="text-2xl font-black text-white pt-1">Switch 能量小勇士</h1>
+      <p class="text-xs text-slate-400">Android 原生正式版 (${releaseVersion} · ${fileSizeStr})</p>
+    </div>
+
+    <!-- Auto download notification banner -->
+    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 text-xs text-emerald-400 flex items-center justify-center gap-2">
+      <svg class="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>正在自动拉起下载，如未开始请点击下方按钮：</span>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="space-y-2.5 pt-1">
+      <a href="${targetDownloadUrl}" download class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-rose-600 via-pink-600 to-rose-600 hover:opacity-90 active:scale-98 text-white font-black text-sm shadow-lg shadow-rose-900/30 flex items-center justify-center gap-2 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        <span>立即下载正式版安装包 (APK)</span>
+      </a>
+
+      <div class="flex gap-2">
+        <a href="/" class="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700/60 transition-all flex items-center justify-center gap-1.5">
+          <span>🌐 进入网页版</span>
+        </a>
+        <a href="${debugDownloadUrl}" download class="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs font-bold border border-slate-700/60 transition-all flex items-center justify-center gap-1.5">
+          <span>🛠️ 调试版下载</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Installation tips -->
+    <div class="text-left bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 text-[11px] text-slate-400 space-y-1.5 leading-relaxed">
+      <p class="font-bold text-slate-300 flex items-center gap-1.5">
+        <span>💡 安装提示：</span>
+      </p>
+      <p>1. 下载完成后点击安装包，若提示<span class="text-slate-200 font-semibold">“允许安装未知应用”</span>，在设置中开启该选项即可继续。</p>
+      <p>2. 原生 App 具备系统级休眠定时闹铃提醒，到点高优先级唤醒播报，建议日常使用平板安装此 App。</p>
+    </div>
+  </div>
+
+  <script>
+    setTimeout(function() {
+      window.location.href = "${targetDownloadUrl}";
+    }, 600);
+  </script>
+</body>
+</html>`;
+
+        return new Response(html, {
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'public, max-age=60, s-maxage=300',
+          },
+        });
       } catch (err: any) {
-        return new Response('Download error: ' + err.message, { status: 500 });
+        return Response.redirect('https://github.com/fake-okhub/child-todo/releases', 302);
       }
     }
 
