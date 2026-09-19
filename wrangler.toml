@@ -1,0 +1,20 @@
+name = "kidstodo"
+main = "worker/index.ts"
+compatibility_date = "2024-09-01"
+workers_dev = true
+
+routes = [
+  { pattern = "kidstodo.jac.edu.kg", custom_domain = true }
+]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "TODO_KV"
+id = "f637eb7f7e0b488590e608f49e1bed62"
+
+
+
+
