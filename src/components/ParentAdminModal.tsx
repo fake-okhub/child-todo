@@ -324,18 +324,20 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
         completedAt: new Date().toISOString(),
       };
 
-      // Check if all regular subjects completed -> unlock auto habit
+      // Check if required number of regular subjects completed -> unlock auto habit
       const regularTasks = nextTasks.filter((t) => !t.isAutoHabit);
-      const isAllRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
+      const requiredCount = settings.requiredTasksForHabit ?? 5;
+      const completedRegularCount = regularTasks.filter((t) => t.isCompleted).length;
+      const isHabitUnlocked = completedRegularCount >= requiredCount;
       const alreadyHasHabit = nextTasks.some((t) => t.isAutoHabit);
       const habitMins = settings.habitRewardMinutes ?? 5;
 
-      if (isAllRegularDone && !alreadyHasHabit) {
+      if (isHabitUnlocked && !alreadyHasHabit) {
         const autoHabit: TaskItem = {
           id: `hist-habit-${date}-${Date.now()}`,
           subject: 'custom',
-          title: '好习惯自动奖励：当日全勤满分！',
-          description: '当日已自觉按时完成所有基础学科，系统自动解锁好习惯大奖',
+          title: `好习惯自动奖励：${requiredCount}门学科满勤完成！`,
+          description: `当日已自觉按时完成 ${requiredCount} 门学科，系统自动解锁好习惯大奖`,
           rewardMinutes: habitMins,
           isCompleted: true,
           completedAt: new Date().toISOString(),
@@ -353,10 +355,12 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
         completedAt: undefined,
       };
 
-      // If regular tasks drop below 100%, remove auto habit if present
+      // If regular completed count drops below threshold, remove auto habit if present
       const regularTasks = nextTasks.filter((t) => !t.isAutoHabit);
-      const isAllRegularDone = regularTasks.length > 0 && regularTasks.every((t) => t.isCompleted);
-      if (!isAllRegularDone) {
+      const requiredCount = settings.requiredTasksForHabit ?? 5;
+      const completedRegularCount = regularTasks.filter((t) => t.isCompleted).length;
+      const isHabitUnlocked = completedRegularCount >= requiredCount;
+      if (!isHabitUnlocked) {
         const habitTask = nextTasks.find((t) => t.isAutoHabit);
         if (habitTask && habitTask.isCompleted) {
           balanceDelta -= (habitTask.rewardMinutes || 5);
@@ -366,11 +370,13 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     }
 
     const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
+    const requiredCount = settings.requiredTasksForHabit ?? 5;
+    const currentCompleted = currentRegular.filter((t) => t.isCompleted).length;
     const updatedDayRecord: DayRecord = {
       date,
       tasks: nextTasks,
       earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((s, t) => s + t.rewardMinutes, 0),
-      hasFullFiveCompleted: currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted),
+      hasFullFiveCompleted: currentCompleted >= requiredCount,
       hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
     };
@@ -397,10 +403,12 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
 
     let nextTasks = dayRec.tasks.filter((t) => t.id !== taskId);
 
-    // If regular tasks drop below 100%, remove auto habit
+    // If regular completed count drops below threshold, remove auto habit
     const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
-    const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
-    if (!isAllRegularDone) {
+    const requiredCount = settings.requiredTasksForHabit ?? 5;
+    const currentCompleted = currentRegular.filter((t) => t.isCompleted).length;
+    const isHabitUnlocked = currentCompleted >= requiredCount;
+    if (!isHabitUnlocked) {
       const habitTask = nextTasks.find((t) => t.isAutoHabit);
       if (habitTask && habitTask.isCompleted) {
         balanceDelta -= (habitTask.rewardMinutes || 5);
@@ -409,11 +417,12 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     }
 
     const finalRegular = nextTasks.filter((t) => !t.isAutoHabit);
+    const finalCompleted = finalRegular.filter((t) => t.isCompleted).length;
     const updatedDayRecord: DayRecord = {
       date,
       tasks: nextTasks,
       earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((s, t) => s + t.rewardMinutes, 0),
-      hasFullFiveCompleted: finalRegular.length > 0 && finalRegular.every((t) => t.isCompleted),
+      hasFullFiveCompleted: finalCompleted >= requiredCount,
       hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
       allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
     };
@@ -679,7 +688,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                     自由配置时长，绝不锁死任何时间数值
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {/* Child Name */}
                   <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
                     <label className="text-[11px] font-bold text-slate-600 mb-1">
@@ -694,10 +703,34 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                     />
                   </div>
 
+                  {/* Habit Required Tasks Threshold */}
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
+                    <label className="text-[11px] font-bold text-slate-600 mb-1">
+                      🎯 好习惯达标门槛：
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-bold text-slate-500">满</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={settings.requiredTasksForHabit ?? 5}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            ...settings,
+                            requiredTasksForHabit: Math.max(1, parseInt(e.target.value) || 1),
+                          })
+                        }
+                        className="w-14 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
+                      />
+                      <span className="text-xs font-bold text-slate-600">项触发</span>
+                    </div>
+                  </div>
+
                   {/* Daily Habit Bonus Minutes */}
                   <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
                     <label className="text-[11px] font-bold text-slate-600 mb-1">
-                      ⭐ 当日全勤好习惯奖励：
+                      ⭐ 好习惯奖励时长：
                     </label>
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-bold text-slate-500">+</span>
@@ -712,7 +745,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                             habitRewardMinutes: Math.max(1, parseInt(e.target.value) || 1),
                           })
                         }
-                        className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
+                        className="w-14 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
                       />
                       <span className="text-xs font-bold text-slate-600">分钟</span>
                     </div>
@@ -721,7 +754,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                   {/* Weekly Full Attendance Bonus Minutes */}
                   <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex flex-col justify-between">
                     <label className="text-[11px] font-bold text-slate-600 mb-1">
-                      🏆 工作日五天全勤大奖：
+                      🏆 五天全勤大奖：
                     </label>
                     <div className="flex items-center gap-1">
                       <span className="text-xs font-bold text-slate-500">+</span>
@@ -736,7 +769,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                             weeklyBonusMinutes: Math.max(1, parseInt(e.target.value) || 1),
                           })
                         }
-                        className="w-16 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
+                        className="w-14 px-2 py-1 rounded-lg border border-slate-300 text-xs font-black font-mono text-center focus:outline-none focus:border-indigo-500"
                       />
                       <span className="text-xs font-bold text-slate-600">分钟</span>
                     </div>
@@ -747,7 +780,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
               {/* Requirement 1: Subject Checklist (运动项可在后台勾选，默认仅5项) */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                 <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
-                  <span>学科包含勾选（完成所选全部科目后自动解锁好习惯奖励）：</span>
+                  <span>学科包含勾选（满 {settings.requiredTasksForHabit ?? 5} 项自动解锁好习惯，当前启用 {currentTemplate.tasks.length} 科）：</span>
                   <span className="text-[11px] text-amber-800 font-mono font-bold">
                     当前启用 {currentTemplate.tasks.length} 科
                   </span>

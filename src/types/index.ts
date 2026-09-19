@@ -68,5 +68,7 @@ export interface UserSettings {
   // 自由激励规则设置（解除硬编码）
   habitRewardMinutes?: number; // 全科完成好习惯奖励时长，默认 5 分钟
   weeklyBonusMinutes?: number; // 工作日全勤周奖励时长，默认 15 分钟
+  requiredTasksForHabit?: number; // 满多少项触发好习惯自动奖励，默认 5 项
 }
+
 

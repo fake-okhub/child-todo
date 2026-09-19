@@ -13,6 +13,7 @@ import {
   getTodayDateString,
   createTasksFromTemplate,
   checkWeeklyFullAttendanceBonus,
+  getRecentThursdayDateString,
 } from './utils/storage';
 import { soundEngine } from './utils/audio';
 import { fireCelebrationConfetti } from './utils/confetti';
@@ -56,17 +57,30 @@ export function App() {
           setSettings((prev) => ({ ...prev, ...cloudData.settings }));
           saveSettings(cloudData.settings);
         }
-        if (cloudData.templates && Array.isArray(cloudData.templates) && cloudData.templates.length > 0) {
-          setTemplates(cloudData.templates);
-          saveTemplates(cloudData.templates);
+        if (cloudData.templates && Array.isArray(cloudData.templates)) {
+          const cleanTemplates = cloudData.templates.filter((t) => t.id !== 'weekend-relaxed');
+          if (cleanTemplates.length > 0) {
+            setTemplates(cleanTemplates);
+            saveTemplates(cleanTemplates);
+          }
         }
-        if (cloudData.tasks && Array.isArray(cloudData.tasks) && cloudData.tasks.length > 0) {
-          setTasks(cloudData.tasks);
-          saveTasks(cloudData.tasks);
+        if (cloudData.tasks && Array.isArray(cloudData.tasks)) {
+          const cleanTasks = cloudData.tasks.filter((t) => t.subject !== 'sports');
+          if (cleanTasks.length > 0) {
+            setTasks(cleanTasks);
+            saveTasks(cleanTasks);
+          }
         }
         if (cloudData.history) {
-          setHistory(cloudData.history);
-          saveHistory(cloudData.history);
+          const thurDate = getRecentThursdayDateString();
+          let cleanHistory = cloudData.history;
+          const keys = Object.keys(cleanHistory);
+          // If cloud history has legacy mock keys, keep only Thursday
+          if (keys.length > 1 && keys.includes(thurDate)) {
+            cleanHistory = { [thurDate]: cleanHistory[thurDate] };
+          }
+          setHistory(cleanHistory);
+          saveHistory(cleanHistory);
         }
       } else if (res.success && !res.data) {
         // Cloud KV is unseeded, seed Cloudflare KV with current initial state
@@ -125,17 +139,19 @@ export function App() {
         t.id === task.id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t
       );
 
-      // Check Good Habit: When all regular scheduled tasks are completed, award habit reward
+      // Check Good Habit: When required number of regular scheduled tasks are completed
       const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
-      const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
+      const requiredCount = settings.requiredTasksForHabit ?? 5;
+      const completedRegularCount = currentRegular.filter((t) => t.isCompleted).length;
+      const isHabitUnlocked = completedRegularCount >= requiredCount;
       const alreadyHasAutoHabit = nextTasks.some((t) => t.isAutoHabit);
 
-      if (isAllRegularDone && !alreadyHasAutoHabit) {
+      if (isHabitUnlocked && !alreadyHasAutoHabit) {
         const autoHabit: TaskItem = {
           id: `habit-${Date.now()}`,
           subject: 'custom',
-          title: '好习惯自动奖励：当日全勤满分！',
-          description: '今日已自觉按时完成全部学科任务，系统自动解锁好习惯大奖',
+          title: `好习惯自动奖励：${requiredCount}门学科满勤完成！`,
+          description: `今日已自觉完成 ${requiredCount} 门学科任务，系统自动解锁好习惯大奖`,
           rewardMinutes: habitBonusMins,
           isCompleted: true,
           completedAt: new Date().toISOString(),
@@ -154,11 +170,12 @@ export function App() {
       // Update today's record in history
       const today = getTodayDateString();
       const updatedRegular = nextTasks.filter((t) => !t.isAutoHabit);
+      const updatedRegularDone = updatedRegular.filter((t) => t.isCompleted).length;
       const updatedDayRecord: DayRecord = {
         date: today,
         tasks: nextTasks,
         earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0),
-        hasFullFiveCompleted: updatedRegular.length > 0 && updatedRegular.every((t) => t.isCompleted),
+        hasFullFiveCompleted: updatedRegularDone >= requiredCount,
         hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
         allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
       };
@@ -191,10 +208,12 @@ export function App() {
         t.id === task.id ? { ...t, isCompleted: false, completedAt: undefined } : t
       );
 
-      // If undoing brought regular tasks below 100%, remove auto habit if present
+      // If undoing brought completed regular tasks below threshold, remove auto habit if present
       const currentRegular = nextTasks.filter((t) => !t.isAutoHabit);
-      const isAllRegularDone = currentRegular.length > 0 && currentRegular.every((t) => t.isCompleted);
-      if (!isAllRegularDone) {
+      const requiredCount = settings.requiredTasksForHabit ?? 5;
+      const completedRegularCount = currentRegular.filter((t) => t.isCompleted).length;
+      const isHabitUnlocked = completedRegularCount >= requiredCount;
+      if (!isHabitUnlocked) {
         const habitTask = nextTasks.find((t) => t.isAutoHabit);
         if (habitTask && habitTask.isCompleted) {
           const balanceWithoutHabit = Math.max(0, nextBalance - (habitTask.rewardMinutes || 5));
@@ -207,11 +226,12 @@ export function App() {
 
       const today = getTodayDateString();
       const updatedRegular = nextTasks.filter((t) => !t.isAutoHabit);
+      const updatedRegularDone = updatedRegular.filter((t) => t.isCompleted).length;
       const updatedDayRecord: DayRecord = {
         date: today,
         tasks: nextTasks,
         earnedMinutes: nextTasks.filter((t) => t.isCompleted).reduce((sum, t) => sum + t.rewardMinutes, 0),
-        hasFullFiveCompleted: updatedRegular.length > 0 && updatedRegular.every((t) => t.isCompleted),
+        hasFullFiveCompleted: updatedRegularDone >= requiredCount,
         hasAutoHabit: nextTasks.some((t) => t.isAutoHabit && t.isCompleted),
         allCompleted: nextTasks.length > 0 && nextTasks.every((t) => t.isCompleted),
       };

@@ -73,13 +73,13 @@ export const SUBJECT_CONFIGS: Record<SubjectType, SubjectConfig> = {
   },
 };
 
-// Default template: Each subject fixed at +5 minutes
+// Default template: Each subject defaults to 5 minutes, 5 items, no sports
 export const DEFAULT_TEMPLATES: TaskTemplate[] = [
   {
-    id: 'weekday-standard',
-    name: '一年级每日 5 科标配模板（每科固定+5分）',
-    description: '涵盖识字、拼音、数字、英语趣配音、绘本5门基础学科，完成5项后自动完成好习惯+5分',
-    badge: '🎒 每日必做',
+    id: 'standard-5-subjects',
+    name: '一年级每日 5 科标配模板',
+    description: '涵盖识字、拼音、数学、英语趣配音、绘本 5 门核心学科，完成 5 项后自动解锁好习惯奖励',
+    badge: '🎒 每日必修',
     tasks: [
       {
         subject: 'hanzi',
@@ -113,46 +113,14 @@ export const DEFAULT_TEMPLATES: TaskTemplate[] = [
       },
     ],
   },
-  {
-    id: 'weekend-relaxed',
-    name: '周末轻松拓展模板（每科固定+5分）',
-    description: '绘本深入研读、生活中的数学发现、英语动画与户外运动',
-    badge: '🎉 周末轻量',
-    tasks: [
-      {
-        subject: 'reading',
-        title: '自主阅读精彩绘本并和家人分享心得',
-        description: '享受故事情节，说说最喜欢哪个角色',
-        rewardMinutes: 5,
-      },
-      {
-        subject: 'sports',
-        title: '户外亲子运动：骑单车/踢球/跑步 30 分钟',
-        description: '拥抱大自然，尽情奔跑出汗',
-        rewardMinutes: 5,
-      },
-      {
-        subject: 'math',
-        title: '生活中的数字小侦探（找找生活中的数学应用）',
-        description: '观察钟表时间、车牌或购物简单计算',
-        rewardMinutes: 5,
-      },
-      {
-        subject: 'dubbing',
-        title: '看一集英语原版少儿动画并模仿 1 句台词',
-        description: '感受纯正语境，自信表达',
-        rewardMinutes: 5,
-      },
-    ],
-  },
 ];
 
 const STORAGE_KEYS = {
-  TASKS: 'switch_kids_todo_tasks_v5',
-  SETTINGS: 'switch_kids_todo_settings_v5',
-  TEMPLATES: 'switch_kids_todo_templates_v5',
-  HISTORY: 'switch_kids_todo_history_v5',
-  LAST_DATE: 'switch_kids_todo_last_date_v5',
+  TASKS: 'switch_kids_todo_tasks_v7',
+  SETTINGS: 'switch_kids_todo_settings_v7',
+  TEMPLATES: 'switch_kids_todo_templates_v7',
+  HISTORY: 'switch_kids_todo_history_v7',
+  LAST_DATE: 'switch_kids_todo_last_date_v7',
 };
 
 export function getTodayDateString(): string {
@@ -275,6 +243,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dailyReminderTime: '17:30',
   dailyReminderMessage: '放学啦！小勇士记得完成今日 5 科打卡，积累周末 Switch 能量哦！',
   habitRewardMinutes: 5,
+  requiredTasksForHabit: 5,
   weeklyBonusMinutes: 15,
 };
 
@@ -326,16 +295,24 @@ export function saveTemplates(templates: TaskTemplate[]): void {
 }
 
 export function loadHistory(): Record<string, DayRecord> {
+  const thurDate = getRecentThursdayDateString();
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Object.keys(parsed).length > 0) return parsed;
+      // Sanitize: ensure no legacy mock days pollute history. Only Thursday or user-recorded days.
+      if (parsed && typeof parsed === 'object') {
+        const keys = Object.keys(parsed);
+        // If it only contains Thursday or legitimate dates
+        if (keys.length === 1 && keys[0] === thurDate) {
+          return parsed;
+        }
+      }
     }
   } catch (e) {
     console.error(e);
   }
-  // Initialize with rich mock historical records
+  // Initialize with strictly Thursday-only history record
   const initialMock = generateMockHistory();
   try {
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(initialMock));
