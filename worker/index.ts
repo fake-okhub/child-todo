@@ -42,7 +42,8 @@ export default {
     if (url.pathname === '/api/check-update') {
       try {
         const cacheKey = 'app_latest_release_cache';
-        if (env.TODO_KV) {
+        const isFresh = url.searchParams.has('fresh');
+        if (!isFresh && env.TODO_KV) {
           const cached = await env.TODO_KV.get(cacheKey);
           if (cached) {
             try {
@@ -83,27 +84,28 @@ export default {
         // Safe fallback if GitHub rate limits or is unreachable
         if (!release || !Array.isArray(release.assets)) {
           release = {
-            tag_name: 'v1.0.0',
-            name: 'KidsTodo v1.0.0 正式发布版',
-            published_at: '2026-09-19T07:01:55Z',
-            body: '### 🎮 KidsTodo - 一年级儿童自律打卡与 Switch 游戏激励系统\n\n- 支持 App 内置在线检测更新与覆盖安装\n- 全新红蓝 Switch 能量小勇士官方高清图标与 Favicon',
-            html_url: 'https://github.com/fake-okhub/child-todo/releases/tag/v1.0.0',
+            tag_name: 'v1.0.1',
+            name: 'KidsTodo v1.0.1 正式发布版',
+            published_at: '2026-09-20T02:00:00Z',
+            body: '### 🎮 KidsTodo v1.0.1 核心特性与更新：\n\n1. **倒计时防误触长按 3 秒充能开机**：防止孩子探索时误扣已攒游戏时间。\n2. **真实消耗分钟精准扣除**：中途暂停或退出不再损失未用时间，剩余时间安全保留在金库中。\n3. **系统自带闹铃声与暂停毫秒级同步**：到点采用平板官方原生高穿透力闹钟铃声，休眠息屏准时唤醒。\n4. **家长后台新增每周时间自主结算清零**：完美适配节假日调休。\n5. **强制东八区跨天结算**：过 00:00 准时结算前日打卡与开启次日新任务。\n6. **首页在线升级弹窗**：检测到云端 Release 自动提醒并一键极速平滑覆盖安装。',
+            html_url: 'https://github.com/fake-okhub/child-todo/releases/tag/v1.0.1',
             assets: [
               {
-                name: 'KidsTodo-Release-v1.0.0.apk',
-                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk',
+                name: 'KidsTodo-Release-v1.0.1.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.1/KidsTodo-Release-v1.0.1.apk',
                 url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337289',
-                size: 4816280,
+                size: 4850000,
               },
               {
-                name: 'KidsTodo-Debug-v1.0.0.apk',
-                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk',
+                name: 'KidsTodo-Debug-v1.0.1.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.1/KidsTodo-Debug-v1.0.1.apk',
                 url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337303',
-                size: 5964131,
+                size: 5980000,
               },
             ],
           };
         }
+
 
         const tagName = release.tag_name || 'v1.0.0';
         const versionClean = tagName.replace(/^v/, '');
@@ -181,9 +183,9 @@ export default {
         const type = url.searchParams.get('type') || 'release';
         const cacheKey = 'app_latest_release_cache';
 
-        let releaseDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Release-v1.0.0.apk';
-        let debugDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.0/KidsTodo-Debug-v1.0.0.apk';
-        let releaseVersion = 'v1.0.0';
+        let releaseDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.1/KidsTodo-Release-v1.0.1.apk';
+        let debugDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.1/KidsTodo-Debug-v1.0.1.apk';
+        let releaseVersion = 'v1.0.1';
         let fileSizeStr = '4.6 MB';
 
         // 1. Check KV Cache first

@@ -27,7 +27,9 @@ import { CalendarView } from './components/CalendarView';
 import { ParentGateModal } from './components/ParentGateModal';
 import { ParentAdminModal } from './components/ParentAdminModal';
 import { SwitchPlayModal } from './components/modals/SwitchPlayModal';
+import { AppUpdateModal } from './components/modals/AppUpdateModal';
 import { TTSLoadingModal } from './components/TTSLoadingModal';
+import { checkAppUpdate, type AppUpdateInfo } from './utils/androidBridge';
 import { MarioCoin, OneUpMushroom } from './components/MarioAssets';
 import { Trophy } from 'lucide-react';
 
@@ -45,6 +47,60 @@ export function App() {
   const [isPlayModalOpen, setIsPlayModalOpen] = useState<boolean>(false);
   const [justEarnedHabit, setJustEarnedHabit] = useState<boolean>(false);
   const [justEarnedWeeklyBonus, setJustEarnedWeeklyBonus] = useState<boolean>(false);
+
+  // Online App Update Detection
+  const [updateInfo, setUpdateInfo] = useState<AppUpdateInfo | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+
+  // Check for App Updates automatically on launch
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const info = await checkAppUpdate();
+        if (info && info.hasUpdate) {
+          setUpdateInfo(info);
+          setIsUpdateModalOpen(true);
+        }
+      } catch (err) {
+        console.log('[UpdateCheck] Background check completed:', err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Strict UTC+8 (Asia/Shanghai) Midnight Day Transition Detection
+  useEffect(() => {
+    let lastCheckedDate = getTodayDateString();
+
+    const checkMidnight = () => {
+      const currentDate = getTodayDateString();
+      if (currentDate !== lastCheckedDate) {
+        console.log(`[Timezone UTC+8] Midnight crossed: ${lastCheckedDate} -> ${currentDate}. Loading today's tasks.`);
+        lastCheckedDate = currentDate;
+        // Reload tasks which triggers day-archiving in storage.ts
+        const refreshed = loadTasks();
+        setTasks(refreshed);
+        setHistory(loadHistory());
+      }
+    };
+
+    // Periodically check every 10 seconds
+    const interval = setInterval(checkMidnight, 10000);
+
+    // Also check immediately when app wakes from background/screen-off
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkMidnight();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // 1. Stale-While-Revalidate (SWR) Initial Cloud Load:
   // Immediately initialize from local storage, then fetch fresh data from Cloudflare KV as primary source
@@ -425,8 +481,16 @@ export function App() {
 
       {/* 4. Global TTS Audio Loading HUD (Anti-Double-Click & Loading Indicator) */}
       <TTSLoadingModal />
+
+      {/* 5. Online App Update Detection & Overlay Install Modal */}
+      <AppUpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        updateInfo={updateInfo}
+      />
     </div>
   );
 }
+
 
 export default App;

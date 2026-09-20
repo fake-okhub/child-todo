@@ -123,34 +123,63 @@ const STORAGE_KEYS = {
   LAST_DATE: 'switch_kids_todo_last_date_v7',
 };
 
+/**
+ * Get current time normalized to UTC+8 (Asia/Shanghai)
+ */
+export function getNowInUTC8(): Date {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utcMs + 8 * 3600000);
+}
+
+/**
+ * Return today's date formatted as YYYY-MM-DD in UTC+8 (Asia/Shanghai)
+ * Crossing 00:00:00 in UTC+8 immediately transitions to the next day.
+ */
 export function getTodayDateString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    const utc8 = getNowInUTC8();
+    const y = utc8.getFullYear();
+    const m = String(utc8.getMonth() + 1).padStart(2, '0');
+    const d = String(utc8.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
 }
 
+/**
+ * Return a date offset from today by daysOffset in UTC+8 (Asia/Shanghai)
+ */
 export function getDateOffset(daysOffset: number): string {
-  const target = new Date();
-  target.setDate(target.getDate() + daysOffset);
-  const y = target.getFullYear();
-  const m = String(target.getMonth() + 1).padStart(2, '0');
-  const d = String(target.getDate()).padStart(2, '0');
+  const utc8 = getNowInUTC8();
+  utc8.setDate(utc8.getDate() + daysOffset);
+  const y = utc8.getFullYear();
+  const m = String(utc8.getMonth() + 1).padStart(2, '0');
+  const d = String(utc8.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Return recent Thursday date string in UTC+8 (Asia/Shanghai)
+ */
 export function getRecentThursdayDateString(): string {
-  const now = new Date();
+  const now = getNowInUTC8();
   const day = now.getDay(); // 0 is Sun, 1 is Mon, ..., 4 is Thu, 6 is Sat
   const diff = (day - 4 + 7) % 7;
-  const target = new Date();
+  const target = new Date(now);
   target.setDate(now.getDate() - diff);
   const y = target.getFullYear();
   const m = String(target.getMonth() + 1).padStart(2, '0');
   const d = String(target.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
 
 // Generate history record: Only Thursday 5 subjects + auto habit completed
 export function generateMockHistory(): Record<string, DayRecord> {
