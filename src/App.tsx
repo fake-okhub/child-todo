@@ -11,7 +11,7 @@ import {
   saveDayRecord,
   saveHistory,
   getTodayDateString,
-  createTasksFromTemplate,
+  mergeTemplateToTodayTasks,
   checkWeeklyFullAttendanceBonus,
   getRecentThursdayDateString,
 } from './utils/storage';
@@ -121,10 +121,28 @@ export function App() {
           }
         }
         if (cloudData.tasks && Array.isArray(cloudData.tasks)) {
-          const cleanTasks = cloudData.tasks.filter((t) => t.subject !== 'sports');
-          if (cleanTasks.length > 0) {
-            setTasks(cleanTasks);
-            saveTasks(cleanTasks);
+          let mergedTasks: TaskItem[] = [...cloudData.tasks];
+          // If active template in cloud has tasks (e.g. sports) missing from today's tasks, merge them in
+          if (cloudData.templates && Array.isArray(cloudData.templates) && cloudData.templates[0]?.tasks) {
+            const tmplTasks: TaskTemplate['tasks'] = cloudData.templates[0].tasks;
+            for (let i = 0; i < tmplTasks.length; i++) {
+              const tmplTask = tmplTasks[i];
+              if (!mergedTasks.some((t: TaskItem) => t.subject === tmplTask.subject)) {
+                mergedTasks.push({
+                  id: `task-${Date.now()}-${i}-${tmplTask.subject}`,
+                  subject: tmplTask.subject,
+                  title: tmplTask.title,
+                  description: tmplTask.description,
+                  rewardMinutes: tmplTask.rewardMinutes || 5,
+                  isCompleted: false,
+                  isAutoHabit: false,
+                });
+              }
+            }
+          }
+          if (mergedTasks.length > 0) {
+            setTasks(mergedTasks);
+            saveTasks(mergedTasks);
           }
         }
         if (cloudData.history) {
@@ -459,8 +477,9 @@ export function App() {
         templates={templates}
         onSaveTemplates={setTemplates}
         onApplyTemplateToToday={(tmpl) => {
-          const newTasks = createTasksFromTemplate(tmpl);
+          const newTasks = mergeTemplateToTodayTasks(tmpl, tasks);
           setTasks(newTasks);
+          saveTasks(newTasks);
         }}
         settings={settings}
         onUpdateSettings={setSettings}

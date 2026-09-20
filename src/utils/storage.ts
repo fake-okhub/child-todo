@@ -381,6 +381,49 @@ export function createTasksFromTemplate(template: TaskTemplate): TaskItem[] {
   }));
 }
 
+/**
+ * Merge template tasks into today's task list without losing already completed status
+ */
+export function mergeTemplateToTodayTasks(template: TaskTemplate, currentTasks: TaskItem[]): TaskItem[] {
+  const merged: TaskItem[] = [];
+  const handledIds = new Set<string>();
+
+  for (let i = 0; i < template.tasks.length; i++) {
+    const tmplTask = template.tasks[i];
+    const existing = currentTasks.find(
+      (t) => t.subject === tmplTask.subject && !handledIds.has(t.id) && !t.isAutoHabit
+    );
+    if (existing) {
+      handledIds.add(existing.id);
+      merged.push({
+        ...existing,
+        title: tmplTask.title,
+        description: tmplTask.description,
+        rewardMinutes: tmplTask.rewardMinutes || 5,
+      });
+    } else {
+      merged.push({
+        id: `task-${Date.now()}-${i}-${tmplTask.subject}`,
+        subject: tmplTask.subject,
+        title: tmplTask.title,
+        description: tmplTask.description,
+        rewardMinutes: tmplTask.rewardMinutes || 5,
+        isCompleted: false,
+        isAutoHabit: false,
+      });
+    }
+  }
+
+  // Preserve any completed tasks or auto-habits that were already finished today
+  for (const t of currentTasks) {
+    if (!handledIds.has(t.id) && (t.isCompleted || t.isAutoHabit)) {
+      merged.push(t);
+    }
+  }
+
+  return merged;
+}
+
 export function loadTasks(): TaskItem[] {
   const today = getTodayDateString();
   const lastDate = localStorage.getItem(STORAGE_KEYS.LAST_DATE);
@@ -420,6 +463,32 @@ export function loadTasks(): TaskItem[] {
       const templates = loadTemplates();
       tasks = createTasksFromTemplate(templates[0]);
       localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+      return tasks;
+    }
+
+    // If today's tasks are missing any subject that is explicitly configured in active template (e.g. sports), auto-merge!
+    const templates = loadTemplates();
+    const activeTemplate = templates[0];
+    if (activeTemplate && Array.isArray(activeTemplate.tasks)) {
+      let hasMissing = false;
+      for (let i = 0; i < activeTemplate.tasks.length; i++) {
+        const tmplTask = activeTemplate.tasks[i];
+        if (!tasks.some((t) => t.subject === tmplTask.subject)) {
+          tasks.push({
+            id: `task-${Date.now()}-${i}-${tmplTask.subject}`,
+            subject: tmplTask.subject,
+            title: tmplTask.title,
+            description: tmplTask.description,
+            rewardMinutes: tmplTask.rewardMinutes || 5,
+            isCompleted: false,
+            isAutoHabit: false,
+          });
+          hasMissing = true;
+        }
+      }
+      if (hasMissing) {
+        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+      }
     }
 
     return tasks;

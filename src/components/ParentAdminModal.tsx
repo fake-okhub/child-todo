@@ -40,6 +40,7 @@ import {
   getTodayDateString,
   getDateOffset,
   createTasksFromTemplate,
+  saveTasks,
 } from '../utils/storage';
 import { soundEngine } from '../utils/audio';
 import {
@@ -289,6 +290,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
   ) => {
     const nextTemplates = [...editingTemplates];
     const currentTasks = [...nextTemplates[selectedTemplateIndex].tasks];
+    const prevTask = currentTasks[taskIdx];
     currentTasks[taskIdx] = { ...currentTasks[taskIdx], ...updated };
     nextTemplates[selectedTemplateIndex] = {
       ...nextTemplates[selectedTemplateIndex],
@@ -296,6 +298,29 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     };
     setEditingTemplates(nextTemplates);
     onSaveTemplates(nextTemplates);
+
+    // If today has an uncompleted task of the same subject, sync the modifications to today
+    if (prevTask) {
+      const updatedTask = currentTasks[taskIdx];
+      let hasChange = false;
+      const nextToday = todayTasks.map((t) => {
+        if (t.subject === prevTask.subject && !t.isCompleted) {
+          hasChange = true;
+          return {
+            ...t,
+            subject: updatedTask.subject,
+            title: updatedTask.title,
+            description: updatedTask.description,
+            rewardMinutes: updatedTask.rewardMinutes || 5,
+          };
+        }
+        return t;
+      });
+      if (hasChange) {
+        onUpdateTodayTasks(nextToday);
+        saveTasks(nextToday);
+      }
+    }
   };
 
   const handleToggleSubjectInTemplate = (subject: SubjectType) => {
@@ -307,18 +332,40 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     if (existingIndex >= 0) {
       // Uncheck / remove from template
       currentTasks.splice(existingIndex, 1);
+
+      // Also remove uncompleted tasks of this subject from today's checklist
+      const nextToday = todayTasks.filter((t) => !(t.subject === subject && !t.isCompleted));
+      onUpdateTodayTasks(nextToday);
+      saveTasks(nextToday);
     } else {
       // Check / add to template
       const def = DEFAULT_SUBJECT_TASKS[subject] || {
         title: `${SUBJECT_CONFIGS[subject].name}练习打卡`,
         desc: '认真完成',
       };
-      currentTasks.push({
+      const newTemplateTask: TemplateTask = {
         subject,
         title: def.title,
         description: def.desc,
         rewardMinutes: 5,
-      });
+      };
+      currentTasks.push(newTemplateTask);
+
+      // Immediately sync to today's task list so it appears in daily checklist!
+      if (!todayTasks.some((t) => t.subject === subject)) {
+        const newTodayTask: TaskItem = {
+          id: `task-${Date.now()}-${subject}`,
+          subject,
+          title: def.title,
+          description: def.desc,
+          rewardMinutes: 5,
+          isCompleted: false,
+          isAutoHabit: false,
+        };
+        const nextToday = [...todayTasks, newTodayTask];
+        onUpdateTodayTasks(nextToday);
+        saveTasks(nextToday);
+      }
     }
 
     nextTemplates[selectedTemplateIndex] = {
@@ -341,14 +388,36 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     nextTemplates[selectedTemplateIndex].tasks.push(newTask);
     setEditingTemplates(nextTemplates);
     onSaveTemplates(nextTemplates);
+
+    // Also sync to today's task list
+    const newTodayTask: TaskItem = {
+      id: `task-${Date.now()}-custom`,
+      subject: newTask.subject,
+      title: newTask.title,
+      description: newTask.description,
+      rewardMinutes: newTask.rewardMinutes,
+      isCompleted: false,
+      isAutoHabit: false,
+    };
+    const nextToday = [...todayTasks, newTodayTask];
+    onUpdateTodayTasks(nextToday);
+    saveTasks(nextToday);
   };
 
   const handleDeleteTaskFromTemplate = (taskIdx: number) => {
     soundEngine.playPop();
     const nextTemplates = [...editingTemplates];
+    const deletedTask = nextTemplates[selectedTemplateIndex].tasks[taskIdx];
     nextTemplates[selectedTemplateIndex].tasks.splice(taskIdx, 1);
     setEditingTemplates(nextTemplates);
     onSaveTemplates(nextTemplates);
+
+    // If deleted from template, also remove matching uncompleted task from today's checklist
+    if (deletedTask) {
+      const nextToday = todayTasks.filter((t) => !(t.subject === deletedTask.subject && !t.isCompleted));
+      onUpdateTodayTasks(nextToday);
+      saveTasks(nextToday);
+    }
   };
 
   const handleAdjustBalance = (delta: number) => {
