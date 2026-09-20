@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- System Clock Timer permission -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Overlay Install APK permission for Android 8.0+ -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 

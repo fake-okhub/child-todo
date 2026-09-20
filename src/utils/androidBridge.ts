@@ -14,7 +14,9 @@ export interface NativeAndroidBridge {
   installApk?: (filePath: string) => void;
   startGamingAlarm?: (seconds: number, title: string) => void;
   cancelGamingAlarm?: () => void;
+  startSystemTimer?: (seconds: number, title: string) => void;
 }
+
 
 
 declare global {
@@ -335,6 +337,22 @@ export function cancelNativeGamingAlarm(): boolean {
       return true;
     } catch (e) {
       console.warn('Failed to cancel native gaming alarm:', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Start native system timer via Android system Clock app (AlarmClock.ACTION_SET_TIMER)
+ */
+export function startNativeSystemTimer(seconds: number, title: string = '🎮 Switch 游戏时间'): boolean {
+  if (isAndroidApp() && window.AndroidBridge && typeof window.AndroidBridge.startSystemTimer === 'function') {
+    try {
+      window.AndroidBridge.startSystemTimer(seconds, title);
+      console.log(`[AndroidBridge] Scheduled native system timer for ${seconds}s`);
+      return true;
+    } catch (e) {
+      console.warn('Failed to start native system timer:', e);
     }
   }
   return false;

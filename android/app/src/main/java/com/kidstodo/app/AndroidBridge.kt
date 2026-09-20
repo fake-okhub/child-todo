@@ -283,6 +283,33 @@ class AndroidBridge(
     }
 
     @JavascriptInterface
+    fun startSystemTimer(seconds: Int, title: String) {
+        if (seconds <= 0) return
+        Log.i(TAG, "startSystemTimer called: seconds=$seconds, title=$title")
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val timerIntent = Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
+                    putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds)
+                    putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, title)
+                    putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+
+                if (timerIntent.resolveActivity(activity.packageManager) != null) {
+                    activity.startActivity(timerIntent)
+                    Log.i(TAG, "Started system clock timer with $seconds seconds")
+                } else {
+                    Log.w(TAG, "No activity found to handle ACTION_SET_TIMER, falling back to internal AlarmManager")
+                    startGamingAlarm(seconds, title)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to launch system timer: ${e.message}", e)
+                startGamingAlarm(seconds, title)
+            }
+        }
+    }
+
+    @JavascriptInterface
     fun installApk(filePath: String) {
         updateManager.installApk(java.io.File(filePath))
     }
