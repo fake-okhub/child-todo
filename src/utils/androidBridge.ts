@@ -206,14 +206,15 @@ export function compareSemVer(v1: string, v2: string): number {
 /**
  * Check whether a new App release is available from Cloudflare Worker or GitHub Releases
  */
-export async function checkAppUpdate(): Promise<AppUpdateInfo> {
+export async function checkAppUpdate(forceFresh: boolean = false): Promise<AppUpdateInfo> {
   const currentVersion = getNativeAppVersion();
 
   let data: any = null;
 
   // 1. Try local Cloudflare Worker update endpoint first
   try {
-    const res = await fetch('/api/check-update', { cache: 'no-cache' });
+    const url = forceFresh ? `/api/check-update?fresh=1&t=${Date.now()}` : '/api/check-update';
+    const res = await fetch(url, { cache: 'no-cache' });
     if (res.ok) {
       const json = await res.json();
       if (json && json.success) {

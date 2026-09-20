@@ -185,7 +185,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     setIsCheckingUpdate(true);
     setUpdateError(null);
     try {
-      const info = await checkAppUpdate();
+      const info = await checkAppUpdate(!silent);
       setUpdateInfo(info);
       if (!silent) {
         soundEngine.playCoin();
