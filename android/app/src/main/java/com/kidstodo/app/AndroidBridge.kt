@@ -331,16 +331,40 @@ class AndroidBridge(
                 }
             }
 
-            // 3. Fallback: Try launching known system clock packages directly
+            // 3. Fallback: Try AlarmClock.ACTION_SHOW_ALARMS (Universal across 100% Android devices)
+            if (!launched) {
+                try {
+                    val showAlarmsIntent = Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    activity.startActivity(showAlarmsIntent)
+                    launched = true
+                    Log.i(TAG, "Successfully launched clock app via ACTION_SHOW_ALARMS")
+                } catch (e: Exception) {
+                    Log.w(TAG, "ACTION_SHOW_ALARMS failed: ${e.message}")
+                }
+            }
+
+            // 4. Fallback: Try launching known system clock packages directly across all Android OEMs
             if (!launched) {
                 val clockPackages = listOf(
-                    "com.google.android.deskclock",
-                    "com.oneplus.deskclock",
-                    "com.coloros.alarmclock",
-                    "com.oppo.alarmclock",
-                    "com.android.deskclock",
-                    "com.sec.android.app.clockpackage",
-                    "com.miui.clock"
+                    "com.google.android.deskclock",      // Google Pixel / AOSP
+                    "com.android.deskclock",             // Standard AOSP / Huawei / Honor
+                    "com.miui.clock",                    // Xiaomi / Redmi / POCO / HyperOS
+                    "com.huawei.deskclock",              // Huawei / HarmonyOS
+                    "com.hihonor.deskclock",             // Honor / MagicOS
+                    "com.oneplus.deskclock",             // OnePlus
+                    "com.coloros.alarmclock",            // OPPO / Realme
+                    "com.oppo.alarmclock",               // OPPO
+                    "com.vivo.clock",                    // Vivo / iQOO (OriginOS)
+                    "com.android.BBKClock",              // BBK / Vivo
+                    "com.bbk.deskclock",                 // BBK / Vivo
+                    "com.sec.android.app.clockpackage",  // Samsung Galaxy (One UI)
+                    "com.meizu.flyme.alarm",             // Meizu (Flyme)
+                    "com.zui.deskclock",                 // Lenovo / Moto
+                    "com.motorola.blur.alarmclock",      // Motorola
+                    "cn.nubia.deskclock.preset",         // Nubia / RedMagic
+                    "com.zte.deskclock"                  // ZTE
                 )
                 for (pkg in clockPackages) {
                     try {
@@ -357,7 +381,7 @@ class AndroidBridge(
                 }
             }
 
-            // 4. Always schedule internal AlarmManager as an infallible safety net
+            // 5. Always schedule internal AlarmManager as an infallible safety net
             startGamingAlarm(seconds, title)
         }
     }

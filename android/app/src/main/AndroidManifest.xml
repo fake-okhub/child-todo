@@ -16,8 +16,9 @@
     <!-- Overlay Install APK permission for Android 8.0+ -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Package Visibility for Android 11+ (API 30+) to query and launch System Clock -->
+    <!-- Package Visibility for Android 11+ (API 30+) to query and launch System Clock across all Android OEMs -->
     <queries>
+        <!-- Standard Android AOSP AlarmClock Intents (universal across Google, Xiaomi, Huawei, Honor, Samsung, OPPO, Vivo) -->
         <intent>
             <action android:name="android.intent.action.SET_TIMER" />
         </intent>
@@ -27,11 +28,38 @@
         <intent>
             <action android:name="android.intent.action.SET_ALARM" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+
+        <!-- Manufacturer Specific Clock Packages -->
+        <!-- Google Pixel / AOSP -->
         <package android:name="com.google.android.deskclock" />
+        <package android:name="com.android.deskclock" />
+        <!-- Xiaomi / Redmi / POCO (MIUI / HyperOS) -->
+        <package android:name="com.miui.clock" />
+        <!-- Huawei / HarmonyOS -->
+        <package android:name="com.huawei.deskclock" />
+        <!-- Honor / MagicOS -->
+        <package android:name="com.hihonor.deskclock" />
+        <!-- OPPO / OnePlus / Realme (ColorOS / OxygenOS / RealmeUI) -->
         <package android:name="com.oneplus.deskclock" />
         <package android:name="com.coloros.alarmclock" />
         <package android:name="com.oppo.alarmclock" />
-        <package android:name="com.android.deskclock" />
+        <!-- Vivo / iQOO (OriginOS / FuntouchOS) -->
+        <package android:name="com.vivo.clock" />
+        <package android:name="com.android.BBKClock" />
+        <package android:name="com.bbk.deskclock" />
+        <!-- Samsung Galaxy (One UI) -->
+        <package android:name="com.sec.android.app.clockpackage" />
+        <!-- Meizu (Flyme) -->
+        <package android:name="com.meizu.flyme.alarm" />
+        <!-- Motorola / Lenovo (ZUI / Moto) -->
+        <package android:name="com.zui.deskclock" />
+        <package android:name="com.motorola.blur.alarmclock" />
+        <!-- ZTE / Nubia -->
+        <package android:name="cn.nubia.deskclock.preset" />
+        <package android:name="com.zte.deskclock" />
     </queries>
 
     <application
