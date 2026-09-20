@@ -84,22 +84,22 @@ export default {
         // Safe fallback if GitHub rate limits or is unreachable
         if (!release || !Array.isArray(release.assets)) {
           release = {
-            tag_name: 'v1.0.2',
-            name: 'KidsTodo v1.0.2 正式发布版',
+            tag_name: 'v1.0.3',
+            name: 'KidsTodo v1.0.3 正式发布版',
             published_at: new Date().toISOString(),
-            body: '### 🎮 KidsTodo v1.0.2 核心特性与更新：\n\n1. **极速唤醒系统自带时钟倒计时**：长按 3 秒充能开机后，直接联动系统时钟 App (ACTION_SET_TIMER)，无缝享受系统级精准计时、锁屏大声提醒与防误触。\n2. **彻底解决长按按钮抖动与白按问题**：采用定高容器、禁用页面手势缩放与文字选择，彻底解决按压最后一秒弹窗抽动或误判松手的体验缺陷。\n3. **防误触全额时间兑换**：长按满 3 秒全额结算兑换金库时间，彻底杜绝探索时的误扣与重复扣减。\n4. **家长后台每周结算与自由调账**：家长可随时一键结算清零或任意奖励/扣除分钟。\n5. **强制东八区跨天结算**：过 00:00 准时结算前日打卡与开启次日新任务。',
-            html_url: 'https://github.com/fake-okhub/child-todo/releases/tag/v1.0.2',
+            body: '### 🎮 KidsTodo v1.0.3 核心特性与更新：\n\n1. **系统级时钟倒计时无缝直达与自动启跑**：修复 Android 11+ 软件包可见性拦截，点击充能开机后瞬间联动系统官方时钟 App，并自动启动倒计时，锁屏休眠准时大声提醒！\n2. **Google Play 保护机制安全加固与权限精简**：移除 Cleartext 明文传输，精简高危闹钟与冗余权限，配置安全网络策略，大幅提升安全合规性。\n3. **彻底解决长按按钮抖动与白按问题**：采用定高容器、禁用页面手势缩放与文字选择，彻底解决按压最后一秒弹窗抽动或误判松手的体验缺陷。\n4. **防误触全额时间兑换**：长按满 3 秒全额结算兑换金库时间，彻底杜绝探索时的误扣与重复扣减。\n5. **家长后台每周结算与自由调账**：家长可随时一键结算清零或任意奖励/扣除分钟。',
+            html_url: 'https://github.com/fake-okhub/child-todo/releases/tag/v1.0.3',
             assets: [
               {
-                name: 'KidsTodo-Release-v1.0.2.apk',
-                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.2/KidsTodo-Release-v1.0.2.apk',
-                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337290',
+                name: 'KidsTodo-Release-v1.0.3.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.3/KidsTodo-Release-v1.0.3.apk',
+                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337291',
                 size: 4860000,
               },
               {
-                name: 'KidsTodo-Debug-v1.0.2.apk',
-                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.2/KidsTodo-Debug-v1.0.2.apk',
-                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337304',
+                name: 'KidsTodo-Debug-v1.0.3.apk',
+                browser_download_url: 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.3/KidsTodo-Debug-v1.0.3.apk',
+                url: 'https://api.github.com/repos/fake-okhub/child-todo/releases/assets/574337305',
                 size: 5990000,
               },
             ],
@@ -183,9 +183,9 @@ export default {
         const type = url.searchParams.get('type') || 'release';
         const cacheKey = 'app_latest_release_cache';
 
-        let releaseDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.2/KidsTodo-Release-v1.0.2.apk';
-        let debugDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.2/KidsTodo-Debug-v1.0.2.apk';
-        let releaseVersion = 'v1.0.2';
+        let releaseDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.3/KidsTodo-Release-v1.0.3.apk';
+        let debugDownloadUrl = 'https://github.com/fake-okhub/child-todo/releases/download/v1.0.3/KidsTodo-Debug-v1.0.3.apk';
+        let releaseVersion = 'v1.0.3';
         let fileSizeStr = '4.6 MB';
 
         // 1. Check KV Cache first

@@ -287,25 +287,78 @@ class AndroidBridge(
         if (seconds <= 0) return
         Log.i(TAG, "startSystemTimer called: seconds=$seconds, title=$title")
         Handler(Looper.getMainLooper()).post {
+            var launched = false
+
+            // 1. Try direct AlarmClock.ACTION_SET_TIMER (with EXTRA_SKIP_UI = true for instant start)
             try {
                 val timerIntent = Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
                     putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds)
                     putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, title)
-                    putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+                    putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-
-                if (timerIntent.resolveActivity(activity.packageManager) != null) {
-                    activity.startActivity(timerIntent)
-                    Log.i(TAG, "Started system clock timer with $seconds seconds")
-                } else {
-                    Log.w(TAG, "No activity found to handle ACTION_SET_TIMER, falling back to internal AlarmManager")
-                    startGamingAlarm(seconds, title)
-                }
+                activity.startActivity(timerIntent)
+                launched = true
+                Log.i(TAG, "Successfully started system timer via ACTION_SET_TIMER ($seconds seconds)")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to launch system timer: ${e.message}", e)
-                startGamingAlarm(seconds, title)
+                Log.w(TAG, "ACTION_SET_TIMER with SKIP_UI=true failed: ${e.message}, trying SKIP_UI=false")
+                try {
+                    val timerIntent = Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
+                        putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds)
+                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, title)
+                        putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, false)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    activity.startActivity(timerIntent)
+                    launched = true
+                    Log.i(TAG, "Successfully started system timer via ACTION_SET_TIMER (SKIP_UI=false)")
+                } catch (e2: Exception) {
+                    Log.w(TAG, "ACTION_SET_TIMER failed: ${e2.message}")
+                }
             }
+
+            // 2. Fallback: Try AlarmClock.ACTION_SHOW_TIMERS
+            if (!launched) {
+                try {
+                    val showTimersIntent = Intent(android.provider.AlarmClock.ACTION_SHOW_TIMERS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    activity.startActivity(showTimersIntent)
+                    launched = true
+                    Log.i(TAG, "Successfully launched clock app via ACTION_SHOW_TIMERS")
+                } catch (e: Exception) {
+                    Log.w(TAG, "ACTION_SHOW_TIMERS failed: ${e.message}")
+                }
+            }
+
+            // 3. Fallback: Try launching known system clock packages directly
+            if (!launched) {
+                val clockPackages = listOf(
+                    "com.google.android.deskclock",
+                    "com.oneplus.deskclock",
+                    "com.coloros.alarmclock",
+                    "com.oppo.alarmclock",
+                    "com.android.deskclock",
+                    "com.sec.android.app.clockpackage",
+                    "com.miui.clock"
+                )
+                for (pkg in clockPackages) {
+                    try {
+                        val launchIntent = activity.packageManager.getLaunchIntentForPackage(pkg)
+                        if (launchIntent != null) {
+                            launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            activity.startActivity(launchIntent)
+                            launched = true
+                            Log.i(TAG, "Successfully launched clock package: $pkg")
+                            break
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+
+            // 4. Always schedule internal AlarmManager as an infallible safety net
+            startGamingAlarm(seconds, title)
         }
     }
 

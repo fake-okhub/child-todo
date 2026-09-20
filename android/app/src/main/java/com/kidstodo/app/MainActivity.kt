@@ -112,6 +112,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        WebView.setWebContentsDebuggingEnabled(true)
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 if (newProgress < 100) {
@@ -120,6 +122,14 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     progressBar.visibility = View.GONE
                 }
+            }
+
+            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                android.util.Log.d(
+                    "WebViewConsole",
+                    "[${consoleMessage?.messageLevel()}] ${consoleMessage?.message()} (${consoleMessage?.sourceId()}:${consoleMessage?.lineNumber()})"
+                )
+                return true
             }
         }
     }
