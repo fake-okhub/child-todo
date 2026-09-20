@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   ExternalLink,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import type {
   TaskTemplate,
@@ -156,6 +157,7 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
   const [downloadProgress, setDownloadProgress] = useState<{ percent: number; current: number; total: number } | null>(null);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [downloadCompleted, setDownloadCompleted] = useState<boolean>(false);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
 
   // Set up window download callbacks from Native Android UpdateManager
   useEffect(() => {
@@ -353,6 +355,17 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
     soundEngine.playPop();
     const next = Math.max(0, settings.balanceMinutes + delta);
     onUpdateSettings({ ...settings, balanceMinutes: next });
+  };
+
+  const handleResetWeeklyBalance = () => {
+    soundEngine.playPop();
+    setShowResetConfirm(true);
+  };
+
+  const confirmResetWeeklyBalance = () => {
+    soundEngine.playSwitchSnap();
+    onUpdateSettings({ ...settings, balanceMinutes: 0 });
+    setShowResetConfirm(false);
   };
 
   // 2. Historical Calendar Management Handlers
@@ -2013,6 +2026,28 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
                 </div>
               </div>
 
+              {/* Weekly Reset / Clear Balance Card */}
+              <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-amber-950">
+                    <RefreshCw className="w-4 h-4 text-amber-600" />
+                    <span>每周时间自主结算清零（由家长掌管）：</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed max-w-md">
+                    周末游玩结束后，由家长在此一键清零本周时间，开启下一轮自律打卡积累。完美适应节假日与周末调休，无需担心周一自动化误清零。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleResetWeeklyBalance}
+                  className="shrink-0 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black shadow-md flex items-center gap-1.5 transition-all active:scale-95"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>结算并清零本周时间</span>
+                </button>
+              </div>
+
               {/* Manual Balance Adjustment */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
@@ -2332,7 +2367,44 @@ export const ParentAdminModal: React.FC<ParentAdminModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Reset Weekly Balance Confirmation Modal Dialog */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border-2 border-amber-400 space-y-4 text-center animate-in fade-in zoom-in-95">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <div>
+              <h4 className="text-base font-black text-slate-900">
+                确认清零本周游玩时间？
+              </h4>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                当前金库共有 <strong className="text-amber-600 font-bold">{settings.balanceMinutes} 分钟</strong>。<br />
+                清零后，孩子将从 0 分钟开始新一周的自律打卡积累。
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all active:scale-95"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={confirmResetWeeklyBalance}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white text-xs font-black shadow-md transition-all active:scale-95"
+              >
+                确认清零
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 

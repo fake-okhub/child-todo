@@ -29,6 +29,7 @@ class AndroidBridge(
         private const val KEY_REMINDER_TITLE = "reminder_title"
         private const val KEY_REMINDER_MESSAGE = "reminder_message"
         private const val ALARM_REQUEST_CODE = 9988
+        private const val GAMING_ALARM_REQUEST_CODE = 9999
 
         fun getPrefs(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -216,7 +217,74 @@ class AndroidBridge(
     }
 
     @JavascriptInterface
+    fun startGamingAlarm(seconds: Int, title: String) {
+        if (seconds <= 0) return
+        Log.i(TAG, "startGamingAlarm called: seconds=$seconds, title=$title")
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val intent = Intent(activity, AlarmReceiver::class.java).apply {
+                    putExtra("title", title)
+                    putExtra("message", "Switch 畅玩倒计时已结束，快闭上眼睛休息一下吧！")
+                    putExtra("isGamingAlarm", true)
+                }
+
+                val pendingIntent = PendingIntent.getBroadcast(
+                    activity,
+                    GAMING_ALARM_REQUEST_CODE,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val alarmManager = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                val triggerAtMillis = System.currentTimeMillis() + (seconds * 1000L)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setExact(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent
+                    )
+                }
+                Log.i(TAG, "Gaming alarm scheduled in $seconds seconds at $triggerAtMillis")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to schedule gaming alarm: ${e.message}", e)
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun cancelGamingAlarm() {
+        Log.i(TAG, "cancelGamingAlarm called")
+        Handler(Looper.getMainLooper()).post {
+            try {
+                val intent = Intent(activity, AlarmReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    activity,
+                    GAMING_ALARM_REQUEST_CODE,
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                )
+                if (pendingIntent != null) {
+                    val alarmManager = activity.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                    alarmManager.cancel(pendingIntent)
+                    pendingIntent.cancel()
+                    Log.i(TAG, "Gaming alarm cancelled")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cancel gaming alarm: ${e.message}", e)
+            }
+        }
+    }
+
+    @JavascriptInterface
     fun installApk(filePath: String) {
         updateManager.installApk(java.io.File(filePath))
     }
 }
+

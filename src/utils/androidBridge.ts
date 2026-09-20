@@ -12,7 +12,10 @@ export interface NativeAndroidBridge {
   getAppVersionCode?: () => number;
   downloadAndInstallApk?: (downloadUrl: string, versionName: string) => void;
   installApk?: (filePath: string) => void;
+  startGamingAlarm?: (seconds: number, title: string) => void;
+  cancelGamingAlarm?: () => void;
 }
+
 
 declare global {
   interface Window {
@@ -299,6 +302,38 @@ export function triggerNativeUpdateDownload(downloadUrl: string, versionName: st
       return true;
     } catch (e) {
       console.error('Failed to trigger native update download:', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Start native gaming alarm countdown using Android AlarmManager & system alarm sound
+ */
+export function startNativeGamingAlarm(seconds: number, title: string = '🎮 Switch 游戏时间到啦！'): boolean {
+  if (isAndroidApp() && window.AndroidBridge && typeof window.AndroidBridge.startGamingAlarm === 'function') {
+    try {
+      window.AndroidBridge.startGamingAlarm(seconds, title);
+      console.log(`[AndroidBridge] Scheduled native gaming alarm for ${seconds}s`);
+      return true;
+    } catch (e) {
+      console.warn('Failed to start native gaming alarm:', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Cancel native gaming alarm countdown
+ */
+export function cancelNativeGamingAlarm(): boolean {
+  if (isAndroidApp() && window.AndroidBridge && typeof window.AndroidBridge.cancelGamingAlarm === 'function') {
+    try {
+      window.AndroidBridge.cancelGamingAlarm();
+      console.log('[AndroidBridge] Cancelled native gaming alarm');
+      return true;
+    } catch (e) {
+      console.warn('Failed to cancel native gaming alarm:', e);
     }
   }
   return false;
