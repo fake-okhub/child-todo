@@ -165,96 +165,7 @@ export function getDateOffset(daysOffset: number): string {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * Return recent Thursday date string in UTC+8 (Asia/Shanghai)
- */
-export function getRecentThursdayDateString(): string {
-  const now = getNowInUTC8();
-  const day = now.getDay(); // 0 is Sun, 1 is Mon, ..., 4 is Thu, 6 is Sat
-  const diff = (day - 4 + 7) % 7;
-  const target = new Date(now);
-  target.setDate(now.getDate() - diff);
-  const y = target.getFullYear();
-  const m = String(target.getMonth() + 1).padStart(2, '0');
-  const d = String(target.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
-
-// Generate history record: Only Thursday 5 subjects + auto habit completed
-export function generateMockHistory(): Record<string, DayRecord> {
-  const thurDate = getRecentThursdayDateString();
-  const mock: Record<string, DayRecord> = {};
-
-  const thursdayTasks: TaskItem[] = [
-    {
-      id: `task-thur-hanzi`,
-      subject: 'hanzi',
-      title: '读背语文书生字表5个生字，田字格描红1行',
-      description: '读准字音，工整书写，注意握笔与坐姿',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T16:45:00.000Z`,
-    },
-    {
-      id: `task-thur-pinyin`,
-      subject: 'pinyin',
-      title: '声母韵母拼读卡片练习 10 分钟',
-      description: '大声拼读，分清前后鼻音与平翘舌音',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T17:10:00.000Z`,
-    },
-    {
-      id: `task-thur-math`,
-      subject: 'math',
-      title: '数学口算天天练 1 页（10-20道）',
-      description: '认真计算，仔细检查，养成细心好习惯',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T17:35:00.000Z`,
-    },
-    {
-      id: `task-thur-dubbing`,
-      subject: 'dubbing',
-      title: '英语原声短句跟读与趣配音 1 遍',
-      description: '模仿纯正语调，大声开口说英语',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T18:00:00.000Z`,
-    },
-    {
-      id: `task-thur-reading`,
-      subject: 'reading',
-      title: '专注阅读精选绘本 15 分钟',
-      description: '安静阅读，读完后给爸爸妈妈简单分享故事',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T18:25:00.000Z`,
-    },
-    {
-      id: `task-thur-habit`,
-      subject: 'custom',
-      title: '好习惯自动奖励：5门学科全勤完成！',
-      description: '当日已自觉按时完成所有基础学科，系统自动解锁好习惯大奖',
-      rewardMinutes: 5,
-      isCompleted: true,
-      completedAt: `${thurDate}T18:25:05.000Z`,
-      isAutoHabit: true,
-    },
-  ];
-
-  mock[thurDate] = {
-    date: thurDate,
-    tasks: thursdayTasks,
-    earnedMinutes: 30,
-    hasFullFiveCompleted: true,
-    hasAutoHabit: true,
-    allCompleted: true,
-  };
-
-  return mock;
-}
 
 export const DEFAULT_SETTINGS: UserSettings = {
   childName: '小勇士',
@@ -324,31 +235,26 @@ export function saveTemplates(templates: TaskTemplate[]): void {
 }
 
 export function loadHistory(): Record<string, DayRecord> {
-  const thurDate = getRecentThursdayDateString();
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Sanitize: ensure no legacy mock days pollute history. Only Thursday or user-recorded days.
       if (parsed && typeof parsed === 'object') {
-        const keys = Object.keys(parsed);
-        // If it only contains Thursday or legitimate dates
-        if (keys.length === 1 && keys[0] === thurDate) {
-          return parsed;
+        const cleaned: Record<string, DayRecord> = {};
+        for (const [date, rec] of Object.entries(parsed as Record<string, DayRecord>)) {
+          // Filter out legacy mock tasks
+          const hasMockTask = rec?.tasks?.some((t) => t.id && t.id.startsWith('task-thur-'));
+          if (!hasMockTask) {
+            cleaned[date] = rec;
+          }
         }
+        return cleaned;
       }
     }
   } catch (e) {
     console.error(e);
   }
-  // Initialize with strictly Thursday-only history record
-  const initialMock = generateMockHistory();
-  try {
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(initialMock));
-  } catch (e) {
-    console.error(e);
-  }
-  return initialMock;
+  return {};
 }
 
 export function saveDayRecord(record: DayRecord): void {

@@ -13,7 +13,6 @@ import {
   getTodayDateString,
   mergeTemplateToTodayTasks,
   checkWeeklyFullAttendanceBonus,
-  getRecentThursdayDateString,
 } from './utils/storage';
 import { soundEngine } from './utils/audio';
 import { fireCelebrationConfetti } from './utils/confetti';
@@ -145,13 +144,13 @@ export function App() {
             saveTasks(mergedTasks);
           }
         }
-        if (cloudData.history) {
-          const thurDate = getRecentThursdayDateString();
-          let cleanHistory = cloudData.history;
-          const keys = Object.keys(cleanHistory);
-          // If cloud history has legacy mock keys, keep only Thursday
-          if (keys.length > 1 && keys.includes(thurDate)) {
-            cleanHistory = { [thurDate]: cleanHistory[thurDate] };
+        if (cloudData.history && typeof cloudData.history === 'object') {
+          const cleanHistory: Record<string, DayRecord> = {};
+          for (const [date, rec] of Object.entries(cloudData.history as Record<string, DayRecord>)) {
+            const hasMockTask = rec?.tasks?.some((t) => t.id && t.id.startsWith('task-thur-'));
+            if (!hasMockTask) {
+              cleanHistory[date] = rec;
+            }
           }
           setHistory(cleanHistory);
           saveHistory(cleanHistory);
