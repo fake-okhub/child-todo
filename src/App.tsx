@@ -458,7 +458,7 @@ export function App() {
       <footer className="w-full max-w-4xl mx-auto px-4 mt-12 text-center text-xs text-slate-400 select-none">
         <p className="flex items-center justify-center gap-1.5">
           <MarioCoin className="w-4 h-4" />
-          <span>家庭平板专享 • 一年级学科自律打卡 • 云端备份已连接至 kidstodo.jac.edu.kg</span>
+          <span>家庭平板专享 • 一年级学科自律打卡 • 云端备份已连接至 kidstodo.jacaf.com</span>
         </p>
       </footer>
 

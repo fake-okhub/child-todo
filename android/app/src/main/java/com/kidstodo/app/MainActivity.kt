@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bridge: AndroidBridge
 
     companion object {
-        const val APP_URL = "https://kidstodo.jac.edu.kg"
+        const val APP_URL = "https://kidstodo.jacaf.com"
         private const val PERMISSION_REQUEST_CODE = 1002
     }
 
