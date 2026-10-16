@@ -4,7 +4,7 @@ compatibility_date = "2024-09-01"
 workers_dev = true
 
 routes = [
-  { pattern = "kidstodo.jac.edu.kg", custom_domain = true }
+  { pattern = "kidstodo.jacaf.com", custom_domain = true }
 ]
 
 [assets]

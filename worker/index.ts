@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker for Kids Todo Sync (kidstodo.jac.edu.kg)
+ * Cloudflare Worker for Kids Todo Sync (kidstodo.jacaf.com)
  */
 
 export interface Env {
@@ -33,7 +33,7 @@ export default {
     // 1. Health check endpoint
     if (url.pathname === '/api/health') {
       return new Response(
-        JSON.stringify({ status: 'ok', service: 'kidstodo-app', domain: 'kidstodo.jac.edu.kg' }),
+        JSON.stringify({ status: 'ok', service: 'kidstodo-app', domain: 'kidstodo.jacaf.com' }),
         { headers }
       );
     }

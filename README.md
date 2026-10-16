@@ -3,7 +3,7 @@
 > 专为一年级儿童打造的学科自律打卡与 Nintendo Switch 游戏时间激励系统。
 > 结合趣味游戏化正向反馈、AI 多音色生字伴读、Android 原生轻量壳、系统级定时闹铃与 Cloudflare 全球边缘云同步。
 
-[![Online URL](https://img.shields.io/badge/Web-kidstodo.jac.edu.kg-brightgreen)](https://kidstodo.jac.edu.kg)
+[![Online URL](https://img.shields.io/badge/Web-kidstodo.jacaf.com-brightgreen)](https://kidstodo.jacaf.com)
 [![React](https://img.shields.io/badge/React-19.2-blue)](https://react.dev/)
 [![Android](https://img.shields.io/badge/Android-Kotlin%208.2-orange)](https://developer.android.com/)
 [![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers%20KV-F38020)](https://workers.cloudflare.com/)
@@ -76,7 +76,7 @@ npx wrangler deploy
 
 ## 🌐 体验入口
 
-- **生产环境自定义域名**：[https://kidstodo.jac.edu.kg](https://kidstodo.jac.edu.kg)
+- **生产环境自定义域名**：[https://kidstodo.jacaf.com](https://kidstodo.jacaf.com)
 - **Cloudflare 托管域名**：[https://kidstodo.joysonchengg.workers.dev](https://kidstodo.joysonchengg.workers.dev)
 
 ---
